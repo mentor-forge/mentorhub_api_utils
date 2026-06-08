@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "api_utils"
 version = "0.1.0"
-description = "A utility package for {{info.name}} microservices"
+description = "A utility package for Mentor Hub microservices"
 authors = [{name = "Mike Storey", email = "devs@agile-learning.institute"}]
 license = "Apache-2.0"
 readme = "README.md"

@@ -2,13 +2,13 @@
 E2E tests for the demo server.
 
 These tests verify that the server endpoints work correctly by making
-actual HTTP requests to a running server at localhost:{{info.base_port + 2}} (COMMON_CODE_API_PORT).
+actual HTTP requests to a running server at localhost:8385 (COMMON_CODE_API_PORT).
 """
 import pytest
 
 from tests.e2e_auth import get_auth_token
 
-BASE_URL = "http://localhost:{{info.base_port + 2}}"
+BASE_URL = "http://localhost:8385"
 
 
 def _requests():

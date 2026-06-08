@@ -44,10 +44,8 @@ class Config:
         'engagement'
         >>> print(config.MONGODB_API_PORT)
         8180
-{%- if dictionaries | length > 0 %}
-        >>> print(config.{{ dictionaries[0].name | replace(' ', '_') | replace('-', '_') | upper }}_COLLECTION_NAME)
-        '{{ dictionaries[0].name }}'
-{%- endif %}
+        >>> print(config.IDENTITY_COLLECTION_NAME)
+        'Identity'
         >>> print(config.DASHBOARD_API_PORT)
         8186
     """
@@ -95,16 +93,36 @@ class Config:
             self.VERSIONS_COLLECTION_NAME = ''
 
             # Data collection names (from catalog.data_dictionaries)
-{%- for d in dictionaries %}
-            self.{{ d.name | replace(' ', '_') | replace('-', '_') | upper }}_COLLECTION_NAME = ''
-{%- endfor %}
+            self.IDENTITY_COLLECTION_NAME = ''
+            self.PROFILE_COLLECTION_NAME = ''
+            self.CUSTOMER_COLLECTION_NAME = ''
+            self.SUBSCRIPTION_COLLECTION_NAME = ''
+            self.CARD_COLLECTION_NAME = ''
+            self.DASHBOARD_COLLECTION_NAME = ''
+            self.EVENT_COLLECTION_NAME = ''
+            self.RESOURCE_COLLECTION_NAME = ''
+            self.PATH_COLLECTION_NAME = ''
+            self.PLAN_COLLECTION_NAME = ''
+            self.ENCOUNTER_COLLECTION_NAME = ''
+            self.JOURNEY_COLLECTION_NAME = ''
+            self.RATING_COLLECTION_NAME = ''
+            self.NOTE_COLLECTION_NAME = ''
 
             # Service Port numbers (defaults from specifications.architecture domains)
-{%- for domain in architecture.domains %}
-{%- set dom_key = domain.name | replace('-', '_') | replace(' ', '_') | upper %}
-            self.{{ dom_key }}_API_PORT = 0
-            self.{{ dom_key }}_SPA_PORT = 0
-{%- endfor %}
+            self.SCHEMA_API_PORT = 0
+            self.SCHEMA_SPA_PORT = 0
+            self.COMMON_CODE_API_PORT = 0
+            self.COMMON_CODE_SPA_PORT = 0
+            self.CUSTOMER_API_PORT = 0
+            self.CUSTOMER_SPA_PORT = 0
+            self.COORDINATOR_API_PORT = 0
+            self.COORDINATOR_SPA_PORT = 0
+            self.MENTOR_API_PORT = 0
+            self.MENTOR_SPA_PORT = 0
+            self.MENTEE_API_PORT = 0
+            self.MENTEE_SPA_PORT = 0
+            self.RUNBOOK_API_PORT = 0
+            self.RUNBOOK_SPA_PORT = 0
 
 
             # Default Values grouped by value type            
@@ -126,21 +144,37 @@ class Config:
                 "VERSIONS_COLLECTION_NAME": "CollectionVersions",
                 
                 # Data collection names (from catalog.data_dictionaries)
-{%- for d in dictionaries %}
-                "{{ d.name | replace(' ', '_') | replace('-', '_') | upper }}_COLLECTION_NAME": "{{ d.name }}",
-{%- endfor %}
+                "IDENTITY_COLLECTION_NAME": "Identity",
+                "PROFILE_COLLECTION_NAME": "Profile",
+                "CUSTOMER_COLLECTION_NAME": "Customer",
+                "SUBSCRIPTION_COLLECTION_NAME": "Subscription",
+                "CARD_COLLECTION_NAME": "Card",
+                "DASHBOARD_COLLECTION_NAME": "Dashboard",
+                "EVENT_COLLECTION_NAME": "Event",
+                "RESOURCE_COLLECTION_NAME": "Resource",
+                "PATH_COLLECTION_NAME": "Path",
+                "PLAN_COLLECTION_NAME": "Plan",
+                "ENCOUNTER_COLLECTION_NAME": "Encounter",
+                "JOURNEY_COLLECTION_NAME": "Journey",
+                "RATING_COLLECTION_NAME": "Rating",
+                "NOTE_COLLECTION_NAME": "Note",
             }
             self.config_ints = {
                 # Service Port numbers (from specifications.architecture domain repos)
-{%- for domain in architecture.domains %}
-{%- set dom_key = domain.name | replace('-', '_') | replace(' ', '_') | upper %}
-{%- set api_repos = domain.repos | selectattr('type', 'equalto', 'api') | list %}
-{%- set spa_repos = domain.repos | selectattr('type', 'in', ['spa', 'spa_ref']) | list %}
-{%- set api_port = api_repos[0].port if api_repos else 0 %}
-{%- set spa_port = spa_repos[0].port if spa_repos else 0 %}
-                "{{ dom_key }}_API_PORT": {{ api_port }},
-                "{{ dom_key }}_SPA_PORT": {{ spa_port }},
-{%- endfor %}
+                "SCHEMA_API_PORT": 8383,
+                "SCHEMA_SPA_PORT": 8384,
+                "COMMON_CODE_API_PORT": 8385,
+                "COMMON_CODE_SPA_PORT": 8386,
+                "CUSTOMER_API_PORT": 8387,
+                "CUSTOMER_SPA_PORT": 8388,
+                "COORDINATOR_API_PORT": 8389,
+                "COORDINATOR_SPA_PORT": 8390,
+                "MENTOR_API_PORT": 8391,
+                "MENTOR_SPA_PORT": 8392,
+                "MENTEE_API_PORT": 8393,
+                "MENTEE_SPA_PORT": 8394,
+                "RUNBOOK_API_PORT": 8395,
+                "RUNBOOK_SPA_PORT": 8396,
             }
 
             self.config_booleans = {
@@ -380,4 +414,3 @@ class Config:
             
         # logger.log("Config Initializing")
         return Config._instance
-
