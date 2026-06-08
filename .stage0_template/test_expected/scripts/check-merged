@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+# Exit 0 if api_utils/config/config.py is merged (plain Python), else 1 with stderr message.
+set -e
+root=$(cd "$(dirname "$0")/.." && pwd)
+f="$root/api_utils/config/config.py"
+if [ ! -f "$f" ]; then
+  exit 0
+fi
+if grep -q '{%' "$f"; then
+  echo "This repository is a Stage0 template: merge product specifications first." >&2
+  echo "An unmerged clone is not a runnable Python project (pipenv, pytest, etc. apply only after merge)." >&2
+  exit 1
+fi

@@ -1,0 +1,88 @@
+architecture:
+  organization: Agile Learning Institute
+  product: Mentor Hub
+  environments:
+    - name: local
+    - name: development
+    - name: staging
+    - name: production
+  domains:
+    - name: schema
+      is_journey: false
+      description: MongoDB Database Configuration and Management.
+      repos:
+        - name: mongodb_api
+          description: MongoDB Configurator API Server
+          template: agile-learning-institute/stage0_template_configurator_api
+          publish: make
+          type: api
+          port: 8383
+        - name: configurator_spa
+          description: MongoDB Configurator SPA (utility container, not a real repository)
+          template: N/A
+          type: spa_ref
+          port: 8384
+    - name: common_code
+      is_journey: false
+      description: Shared code used across multiple API or SPA code bases are published to private dependency management libraries (NPM /PYPI).
+      repos:
+        - name: api_utils
+          description: Python PyPI API Utility Library
+          template: agile-learning-institute/stage0_template_py_utils
+          publish: pipenv
+          type: api
+          port: 8385
+        - name: spa_utils
+          description: Vue NPM SPA Utility Library
+          template: agile-learning-institute/stage0_template_vue_utils
+          publish: npm
+          type: spa
+          port: 8386
+    - name: profile
+      is_journey: true
+      description: Profile domain
+      repos:
+        - name: profile_api
+          description: Profile API
+          template: agile-learning-institute/stage0_template_flask_mongo
+          publish: pipenv
+          type: api
+          port: 8387
+        - name: profile_spa
+          description: Profile SPA
+          template: agile-learning-institute/stage0_template_vue_vuetify
+          publish: npm
+          type: spa
+          port: 8388
+    - name: mentor
+      is_journey: true
+      description: Mentor domain
+      repos:
+        - name: mentor_api
+          description: Mentor API
+          template: agile-learning-institute/stage0_template_flask_mongo
+          publish: pipenv
+          type: api
+          port: 8389
+        - name: mentor_spa
+          description: Mentor SPA
+          template: agile-learning-institute/stage0_template_vue_vuetify
+          publish: npm
+          type: spa
+          port: 8390
+    - name: member
+      is_journey: true
+      description: Member domain
+      repos:
+        - name: member_api
+          description: Member API
+          template: agile-learning-institute/stage0_template_flask_mongo
+          publish: pipenv
+          type: api
+          port: 8391
+        - name: member_spa
+          description: Member SPA
+          template: agile-learning-institute/stage0_template_vue_vuetify
+          publish: npm
+          type: spa
+          port: 8392

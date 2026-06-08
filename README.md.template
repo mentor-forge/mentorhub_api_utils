@@ -1,0 +1,102 @@
+# {{ info.name }} — shared API utilities
+
+This repo builds and publishes the **`{{ info.slug }}_api_utils`** PyPI library used across the [{{ info.name }}]({{ org.git_host }}/{{ org.git_org }}/{{ info.slug }}) system.
+
+## Prerequisites
+- {{ info.name }} [Developers Edition]({{ org.git_host }}/{{ org.git_org }}/{{ info.slug }}/blob/main/CONTRIBUTING.md)
+- Developer [SPA Standard Prerequisites]({{ org.git_host }}/{{ org.git_org }}/{{ info.slug }}/blob/main/DeveloperEdition/standards/spa_standards.md)
+
+## Developer Commands
+
+```bash
+## Install dependencies
+pipenv install --dev
+
+# start backing db container (required for MongoIO unit/integration tests)
+pipenv run db
+
+## run unit tests (includes MongoIO Integration Tests)
+pipenv run test
+
+## run demo dev server - captures command line, serves API at localhost:9092
+## Note: dev uses a fixed JWT_SECRET for local E2E; see tests/e2e_auth.py
+pipenv run dev
+
+## run E2E tests (assumes running API at localhost:9092)
+pipenv run e2e
+
+## build package for deployment
+pipenv run build
+
+## format code
+pipenv run format
+
+## lint code
+pipenv run lint
+```
+
+## Project Structure
+
+- `api_utils/` - Main package containing:
+  - `config/` - Configuration singleton with support for file, environment, and default values
+  - `flask_utils/` - Flask-specific utilities (JSON encoder, token, breadcrumb)
+  - `mongo_utils/` - MongoDB utilities (MongoIO singleton, document encoding, infinite scroll)
+  - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer)
+
+- `tests/` - Test suite for all components
+
+## Domain APIs vs. this library
+
+**Developer Edition:** Domain APIs and this library **validate** JWTs issued by the welcome page / IdP. See [API Standards]({{ org.git_host }}/{{ org.git_org }}/{{ info.slug }}/blob/main/DeveloperEdition/standards/api_standards.md).
+
+The packaged **demo server** (`api_utils/server.py`) documents config and metrics only; obtain Bearer tokens from your IdP (or the static test token in `tests/e2e_auth.py` for black-box runs).
+
+## Demo Server
+
+A demonstration server is included to showcase the utilities and support black-box testing.
+See [server.py](./api_utils/server.py) for sample implementation details.
+
+### Starting the Server
+
+```bash
+# Start the demo server (JWT_SECRET matches tests/e2e_auth.py)
+pipenv run dev
+
+# Server will be available at http://localhost:9092
+```
+
+### API Explorer
+
+Visit **http://localhost:9092/docs/explorer.html** for an interactive API explorer with:
+- Complete endpoint documentation
+- Try-it-out functionality for testing
+- Request/response examples
+- Authentication testing
+
+### Available Endpoints
+
+- `/docs/explorer.html` - Interactive API Explorer (Swagger UI)
+- `/docs/openapi.yaml` - OpenAPI specification
+- `/api/config` - Configuration endpoint (requires valid JWT token)
+- `/metrics` - Prometheus metrics endpoint
+
+### Quick curl Examples
+
+```bash
+# Get configuration (use a JWT from your IdP, or the token in tests/e2e_auth.py for local E2E)
+curl http://localhost:9092/api/config \
+  -H "Authorization: Bearer $TOKEN"
+
+# Get Prometheus metrics
+curl http://localhost:9092/metrics
+```
+
+### What the Server Demonstrates
+
+- Config singleton initialization
+- MongoIO singleton connection
+- Flask route registration with factory pattern
+- Prometheus metrics integration
+- JWT token authentication and authorization
+- Interactive API documentation
+- Graceful shutdown handling

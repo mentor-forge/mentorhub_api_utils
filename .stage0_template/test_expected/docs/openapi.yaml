@@ -1,0 +1,245 @@
+openapi: 3.0.3
+info:
+  title: api_utils Demo Server
+  description: |
+    Demonstration server for the api_utils Python package.
+    
+    This server showcases the utilities provided by api_utils:
+    - Config singleton for configuration management
+    - MongoIO singleton for MongoDB operations
+    - Flask routes for config endpoint
+    - JWT authentication and token validation
+    - Prometheus metrics endpoint
+    
+    JWTs are issued by your identity provider (or the Developer Edition welcome flow), not by
+    this demo server. This OpenAPI documents the **library demo server** (`/api/config`, `/metrics`,
+    `/docs`).
+    
+    ## Authentication
+    
+    Protected endpoints require a Bearer JWT that validates against `JWT_SECRET`, `JWT_ISSUER`,
+    and `JWT_AUDIENCE`. For local black-box tests, use a token signed with the same secret as
+    `pipenv run dev` (see repository `tests/e2e_auth.py`).
+    
+    ```bash
+    curl -H "Authorization: Bearer $TOKEN" http://localhost:8385/api/config
+    ```
+    
+    ## Security Requirements
+    
+    **CRITICAL:** `JWT_SECRET` must be explicitly set before using api_utils.
+    The application will fail to start if `JWT_SECRET` is not configured.
+    
+    See the [SECURITY.md](https://github.com/mentor-hub-system/mentorhub_api_utils/blob/main/SECURITY.md) 
+    for complete security documentation.
+    
+  version: 1.0.0
+  contact:
+    name: Agile Learning Institute
+    url: https://github.com/mentor-hub-system/mentorhub_api_utils
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8385
+    description: Local development server (default)
+
+tags:
+  - name: Configuration
+    description: Runtime configuration endpoints
+  - name: Monitoring
+    description: Prometheus metrics and health endpoints
+
+paths:
+  /api/config:
+    get:
+      tags:
+        - Configuration
+      summary: Get runtime configuration
+      description: |
+        Retrieve the current runtime configuration including:
+        - Configuration items with their sources (file, environment, default)
+        - Database enumerators
+        - Collection versions
+        - Token information
+        
+        Secret values are masked in the response.
+      operationId: getConfig
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '401':
+          description: Unauthorized - missing or invalid authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-code-samples:
+        - lang: curl
+          source: |
+            curl -X GET "http://localhost:8385/api/config" \
+              -H "Authorization: Bearer $TOKEN"
+
+  /metrics:
+    get:
+      tags:
+        - Monitoring
+      summary: Prometheus metrics endpoint
+      description: |
+        Metrics in Prometheus text exposition format.
+        
+        This endpoint is automatically exposed by the `create_metric_routes()` function
+        and provides metrics about:
+        - HTTP request counts and durations
+        - Response status codes
+        - Active requests
+        
+        No authentication required.
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP flask_http_request_duration_seconds Flask HTTP request duration in seconds
+                  # TYPE flask_http_request_duration_seconds histogram
+                  flask_http_request_duration_seconds_bucket{le="0.005",method="GET",path="/api/config",status="200"} 1.0
+      x-code-samples:
+        - lang: curl
+          source: |
+            curl -X GET "http://localhost:8385/metrics"
+
+  /docs/{filename}:
+    get:
+      tags:
+        - Documentation
+      summary: Serve API documentation files
+      description: |
+        Serve static files from the docs directory including:
+        - explorer.html - Interactive API explorer (Swagger UI)
+        - openapi.yaml - OpenAPI specification
+      operationId: getDocs
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          description: Documentation filename
+          schema:
+            type: string
+            example: explorer.html
+      responses:
+        '200':
+          description: Documentation file served successfully
+          content:
+            text/html:
+              schema:
+                type: string
+            text/yaml:
+              schema:
+                type: string
+        '404':
+          description: File not found
+      x-code-samples:
+        - lang: curl
+          source: |
+            # Access the API explorer
+            curl -X GET "http://localhost:8385/docs/explorer.html"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT authentication. Tokens must be issued by your identity provider and match
+        configured issuer, audience, and signing secret.
+
+  schemas:
+    ConfigResponse:
+      type: object
+      required:
+        - config_items
+        - versions
+        - enumerators
+        - token
+      properties:
+        config_items:
+          type: array
+          description: List of configuration items with their sources
+          items:
+            $ref: '#/components/schemas/ConfigItem'
+        versions:
+          type: array
+          description: Collection version information from MongoDB
+          items:
+            type: object
+        enumerators:
+          type: array
+          description: Database enumerator documents from MongoDB
+          items:
+            type: object
+        token:
+          type: object
+          description: Authenticated user token information
+          properties:
+            user_id:
+              type: string
+              example: "test-user-123"
+            roles:
+              type: array
+              items:
+                type: string
+              example: ["developer"]
+            remote_ip:
+              type: string
+              example: "127.0.0.1"
+    
+    ConfigItem:
+      type: object
+      required:
+        - name
+        - value
+        - from
+      properties:
+        name:
+          type: string
+          description: Configuration key name
+          example: "MONGO_DB_NAME"
+        value:
+          type: string
+          description: Configuration value (secrets are masked as "secret")
+          example: "engagement"
+        from:
+          type: string
+          enum: [file, environment, default]
+          description: Source of the configuration value
+          example: "environment"
+    
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Missing or invalid Authorization header"
+        details:
+          type: string
+          description: Additional error details (optional)
