@@ -1,10 +1,28 @@
 # Mentor Hub — shared API utilities
 
-This repo builds and publishes the **`mentorhub_api_utils`** PyPI library used across the [Mentor Hub](https://github.com/mentor-forge/mentorhub) system.
+This repo builds and publishes the **`api_utils`** PyPI package (`pip install api-utils`) used across the [Mentor Hub](https://github.com/mentor-forge/mentorhub) system. Packages are published to **AWS CodeArtifact** in the Shared-Services account.
 
 ## Prerequisites
 - Mentor Hub [Developers Edition](https://github.com/mentor-forge/mentorhub/blob/main/CONTRIBUTING.md)
 - Developer [SPA Standard Prerequisites](https://github.com/mentor-forge/mentorhub/blob/main/DeveloperEdition/standards/spa_standards.md)
+- AWS CLI v2 with SSO profile **`mentorhub-shared`** (Shared-Services, Developer-Packages or SRE)
+
+## Install from CodeArtifact
+
+Domain APIs install a pinned version from CodeArtifact — not from git or public PyPI. Public PyPI has an unrelated `api-utils` package; always use the CodeArtifact index.
+
+```bash
+aws sso login --profile mentorhub-shared
+aws codeartifact login --tool pip \
+  --domain mentor-forge \
+  --domain-owner 560167829275 \
+  --repository mentorhub-pypi \
+  --region us-east-1 \
+  --profile mentorhub-shared
+pip install api-utils==0.1.0
+```
+
+In a domain API `Pipfile`, use a CodeArtifact source and pin an exact version (see [Dependency Registry Migration](https://github.com/mentor-forge/mentorhub/blob/main/Specifications/DEPENDENCY_MOVE.md)).
 
 ## Developer Commands
 
@@ -28,12 +46,28 @@ pipenv run e2e
 ## build package for deployment
 pipenv run build
 
+## publish to CodeArtifact (SRE / publish role; after SSO login)
+pipenv run publish-package
+
 ## format code
 pipenv run format
 
 ## lint code
 pipenv run lint
 ```
+
+## Release and publish
+
+1. Bump **`version`** in [pyproject.toml](./pyproject.toml) (SemVer).
+2. Merge to `main`.
+3. Tag and push — CI publishes on `v*` tags:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+4. GitHub Actions (`.github/workflows/publish-package.yml`) builds wheel/sdist and uploads to CodeArtifact. Requires org variables (`AWS_REGION`, `CODEARTIFACT_*`, `AWS_SHARED_SERVICES_ACCOUNT_ID`) and repo secret `AWS_ROLE_ARN_PUBLISH`.
+
+**Local publish** (alternative to CI): `aws sso login --profile mentorhub-shared` then `pipenv run publish-package`.
 
 ## Project Structure
 
