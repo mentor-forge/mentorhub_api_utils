@@ -1,8 +1,8 @@
 """Static bearer JWT for E2E tests against the demo server.
 
 Must match ``JWT_SECRET`` used when running the API locally. Developer Edition and ``pipenv run dev``
-default to ``local-dev-jwt-secret-fixed``. Same string as welcome ``index.html`` TOKEN_ADAM.
-Claims: iss ``dev-idp``, aud ``dev-api``; subject ``adam`` with role ``admin``.
+default to ``local-dev-jwt-secret-fixed`` (same secret as ``welcome-auth.js`` / ``login.html``).
+Claims: iss ``dev-idp``, aud ``dev-api``; subject ``adam`` with role ``admin`` (static E2E persona).
 """
 
 E2E_ACCESS_TOKEN = (
