@@ -5,19 +5,13 @@ This repo builds and publishes the **`api_utils`** PyPI package (`pip install ap
 ## Prerequisites
 - Mentor Hub [Developers Edition](https://github.com/mentor-forge/mentorhub/blob/main/CONTRIBUTING.md)
 - Developer [SPA Standard Prerequisites](https://github.com/mentor-forge/mentorhub/blob/main/DeveloperEdition/standards/spa_standards.md)
-- AWS CLI v2 with SSO profile **`mentorhub-shared`** (Shared-Services, Developer-Packages or SRE)
 
 ## Install as a dependency (domain APIs)
 
-After the CodeArtifact migration, domain API developers install a pinned version from CodeArtifact — not git or public PyPI. Public PyPI has an unrelated `api-utils` package; always use the CodeArtifact index.
-
 ```bash
-mh codeartifact login    # once per session (~12h); included in make update
-cd ../mentorhub_coordinator_api
+mh              # once per session (~12h)
 pipenv install
 ```
-
-Configure the domain API `Pipfile` with a CodeArtifact source and pinned version (see [Dependency Registry Migration](https://github.com/mentor-forge/mentorhub/blob/main/Specifications/DEPENDENCY_MOVE.md)).
 
 ## Developer Commands
 
@@ -56,29 +50,9 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.2.0`), unlike app containers that publish `:latest` on every merge to `main`. Releasing is two steps — same PR workflow as everything else, plus one command after merge:
-
-```text
-PR (feature branch)     merge to main          tag (on main)
-─────────────────     ───────────────      ─────────────────
-edit pyproject.toml     review + merge       pipenv run tag-release
-commit + open PR                             → CI publishes to CodeArtifact
-```
-
-### Step 1 — bump version (in your release PR)
-
-Edit `version` in [pyproject.toml](./pyproject.toml) (SemVer), commit with your changes, and merge via PR.
-
-### Step 2 — tag release (after merge, on up-to-date main)
-
-The tag must match `pyproject.toml` (`v0.2.0` ↔ `version = "0.2.0"`). CI enforces this.
-
-```bash
-git checkout main && git pull
-pipenv run tag-release
-```
-
-That creates and pushes `v{version}`; GitHub Actions builds and uploads to CodeArtifact. Requires org variables (`AWS_REGION`, `CODEARTIFACT_*`, `AWS_SHARED_SERVICES_ACCOUNT_ID`) and repo secret `AWS_ROLE_ARN_PUBLISH`.
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.2.0`). Releasing is two steps: 
+- Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
+- After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
 
 **Local publish** (SRE / debugging, skips CI): `aws sso login --profile mentorhub-shared` then `pipenv run publish-package`.
 
@@ -94,9 +68,9 @@ That creates and pushes `v{version}`; GitHub Actions builds and uploads to CodeA
 
 ## Domain APIs vs. this library
 
-**Developer Edition:** Domain APIs and this library **validate** JWTs issued by the welcome page / IdP. See [API Standards](https://github.com/mentor-forge/mentorhub/blob/main/DeveloperEdition/standards/api_standards.md).
+**Developer Edition:** Domain APIs and this library **validate** Bearer JWTs only; they do not mint credentials. Journey SPAs obtain tokens from the umbrella **developer sign-in page** ([`login.html`](https://github.com/mentor-forge/mentorhub/blob/main/login.html) at `http://127.0.0.1:8080/login.html`), which mints persona JWTs in the browser (`iss: dev-idp`, `aud: dev-api`, shared `JWT_SECRET`). See [API Standards](https://github.com/mentor-forge/mentorhub/blob/main/DeveloperEdition/standards/api_standards.md).
 
-The packaged **demo server** (`api_utils/server.py`) documents config and metrics only; obtain Bearer tokens from your IdP (or the static test token in `tests/e2e_auth.py` for black-box runs).
+The packaged **demo server** (`api_utils/server.py`) is separate from that SPA login flow—it exposes config, metrics, and docs for library testing. For local E2E against `pipenv run dev`, use the static token in `tests/e2e_auth.py` (same `JWT_SECRET` as Developer Edition compose).
 
 ## Demo Server
 
@@ -130,7 +104,8 @@ Visit **http://localhost:9092/docs/explorer.html** for an interactive API explor
 ### Quick curl Examples
 
 ```bash
-# Get configuration (use a JWT from your IdP, or the token in tests/e2e_auth.py for local E2E)
+# Get configuration (Developer Edition: sign in at login.html and copy access_token from the SPA;
+# for pipenv run dev E2E, use tests/e2e_auth.py)
 curl http://localhost:9092/api/config \
   -H "Authorization: Bearer $TOKEN"
 
