@@ -27,6 +27,7 @@ format = "black api_utils tests"
 db = "mh up mongodb"
 build-publish = "sh -c 'pipenv install --dev && pipenv run build'"
 build-package = "sh -c 'pipenv install --dev && pipenv run build'"
+tag-release = "sh scripts/tag-release"
 publish-package = "sh scripts/publish-package"
 delete-package = "sh -c 'echo delete-package: no-op for api_utils'"
 

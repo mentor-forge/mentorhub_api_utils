@@ -7,22 +7,17 @@ This repo builds and publishes the **`api_utils`** PyPI package (`pip install ap
 - Developer [SPA Standard Prerequisites](https://github.com/mentor-forge/mentorhub/blob/main/DeveloperEdition/standards/spa_standards.md)
 - AWS CLI v2 with SSO profile **`mentorhub-shared`** (Shared-Services, Developer-Packages or SRE)
 
-## Install from CodeArtifact
+## Install as a dependency (domain APIs)
 
-Domain APIs install a pinned version from CodeArtifact — not from git or public PyPI. Public PyPI has an unrelated `api-utils` package; always use the CodeArtifact index.
+After the CodeArtifact migration, domain API developers install a pinned version from CodeArtifact — not git or public PyPI. Public PyPI has an unrelated `api-utils` package; always use the CodeArtifact index.
 
 ```bash
-aws sso login --profile mentorhub-shared
-aws codeartifact login --tool pip \
-  --domain mentor-forge \
-  --domain-owner 560167829275 \
-  --repository mentorhub-pypi \
-  --region us-east-1 \
-  --profile mentorhub-shared
-pip install api-utils==0.1.0
+mh codeartifact login    # once per session (~12h); included in make update
+cd ../mentorhub_coordinator_api
+pipenv install
 ```
 
-In a domain API `Pipfile`, use a CodeArtifact source and pin an exact version (see [Dependency Registry Migration](https://github.com/mentor-forge/mentorhub/blob/main/Specifications/DEPENDENCY_MOVE.md)).
+Configure the domain API `Pipfile` with a CodeArtifact source and pinned version (see [Dependency Registry Migration](https://github.com/mentor-forge/mentorhub/blob/main/Specifications/DEPENDENCY_MOVE.md)).
 
 ## Developer Commands
 
@@ -46,7 +41,10 @@ pipenv run e2e
 ## build package for deployment
 pipenv run build
 
-## publish to CodeArtifact (SRE / publish role; after SSO login)
+## release: tag after merge — see Release and publish
+pipenv run tag-release
+
+## publish to CodeArtifact locally (SRE / publish role; after SSO login)
 pipenv run publish-package
 
 ## format code
@@ -58,16 +56,31 @@ pipenv run lint
 
 ## Release and publish
 
-1. Bump **`version`** in [pyproject.toml](./pyproject.toml) (SemVer).
-2. Merge to `main`.
-3. Tag and push — CI publishes on `v*` tags:
-   ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
-   ```
-4. GitHub Actions (`.github/workflows/publish-package.yml`) builds wheel/sdist and uploads to CodeArtifact. Requires org variables (`AWS_REGION`, `CODEARTIFACT_*`, `AWS_SHARED_SERVICES_ACCOUNT_ID`) and repo secret `AWS_ROLE_ARN_PUBLISH`.
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.2.0`), unlike app containers that publish `:latest` on every merge to `main`. Releasing is two steps — same PR workflow as everything else, plus one command after merge:
 
-**Local publish** (alternative to CI): `aws sso login --profile mentorhub-shared` then `pipenv run publish-package`.
+```text
+PR (feature branch)     merge to main          tag (on main)
+─────────────────     ───────────────      ─────────────────
+edit pyproject.toml     review + merge       pipenv run tag-release
+commit + open PR                             → CI publishes to CodeArtifact
+```
+
+### Step 1 — bump version (in your release PR)
+
+Edit `version` in [pyproject.toml](./pyproject.toml) (SemVer), commit with your changes, and merge via PR.
+
+### Step 2 — tag release (after merge, on up-to-date main)
+
+The tag must match `pyproject.toml` (`v0.2.0` ↔ `version = "0.2.0"`). CI enforces this.
+
+```bash
+git checkout main && git pull
+pipenv run tag-release
+```
+
+That creates and pushes `v{version}`; GitHub Actions builds and uploads to CodeArtifact. Requires org variables (`AWS_REGION`, `CODEARTIFACT_*`, `AWS_SHARED_SERVICES_ACCOUNT_ID`) and repo secret `AWS_ROLE_ARN_PUBLISH`.
+
+**Local publish** (SRE / debugging, skips CI): `aws sso login --profile mentorhub-shared` then `pipenv run publish-package`.
 
 ## Project Structure
 
