@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# Build and upload to CodeArtifact (mentorhub-pypi).
+# Targets: Specifications/aws-platform.yaml — override via env if needed.
+set -e
+
+pipenv install --dev
+pipenv run build
+
+aws codeartifact login --tool twine \
+  --domain "${CODEARTIFACT_DOMAIN:-mentor-forge}" \
+  --domain-owner "${AWS_SHARED_SERVICES_ACCOUNT_ID:-560167829275}" \
+  --repository "${CODEARTIFACT_PYPI_REPO:-mentorhub-pypi}" \
+  --region "${AWS_REGION:-us-east-1}" \
+  --profile "${MH_AWS_PROFILE_SHARED:-mentorhub-shared}"
+
+pipenv run twine upload --repository codeartifact dist/*

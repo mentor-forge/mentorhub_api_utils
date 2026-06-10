@@ -1,5 +1,4 @@
-# After merge with product specifications this file describes a Python package.
-# An unmerged Stage0 template clone may contain Jinja in sources and is not a runnable project.
+# Python package metadata for api_utils (pip install name: api-utils).
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
