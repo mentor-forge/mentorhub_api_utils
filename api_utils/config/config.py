@@ -107,6 +107,7 @@ class Config:
             self.JOURNEY_COLLECTION_NAME = ''
             self.RATING_COLLECTION_NAME = ''
             self.NOTE_COLLECTION_NAME = ''
+            self.LOGIN_COLLECTION_NAME = ''
 
             # Service Port numbers (defaults from specifications.architecture domains)
             self.SCHEMA_API_PORT = 0
@@ -158,6 +159,7 @@ class Config:
                 "JOURNEY_COLLECTION_NAME": "Journey",
                 "RATING_COLLECTION_NAME": "Rating",
                 "NOTE_COLLECTION_NAME": "Note",
+                "LOGIN_COLLECTION_NAME": "Login",
             }
             self.config_ints = {
                 # Service Port numbers (from specifications.architecture domain repos)
