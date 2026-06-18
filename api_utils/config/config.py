@@ -110,6 +110,13 @@ class Config:
             self.NOTE_COLLECTION_NAME = ''
             self.LOGIN_COLLECTION_NAME = ''
 
+            # Role Constants
+            self.ROLE_MENTOR = ''
+            self.ROLE_MENTEE = ''
+            self.ROLE_COORDINATOR = ''
+            self.ROLE_CUSTOMER = ''
+            self.ROLE_ADMIN = ''
+            
             # Service Port numbers (defaults from specifications.architecture domains)
             self.SCHEMA_API_PORT = 0
             self.SCHEMA_SPA_PORT = 0
@@ -162,7 +169,15 @@ class Config:
                 "RATING_COLLECTION_NAME": "Rating",
                 "NOTE_COLLECTION_NAME": "Note",
                 "LOGIN_COLLECTION_NAME": "Login",
+
+                # Role Constants
+                "ROLE_MENTOR": "mentor",
+                "ROLE_MENTEE": "mentee",
+                "ROLE_COORDINATOR": "coordinator",
+                "ROLE_CUSTOMER": "customer",
+                "ROLE_ADMIN": "admin",
             }
+            
             self.config_ints = {
                 # Service Port numbers (from specifications.architecture domain repos)
                 "SCHEMA_API_PORT": 8383,
