@@ -105,6 +105,7 @@ class Config:
             self.PLAN_COLLECTION_NAME = ''
             self.ENCOUNTER_COLLECTION_NAME = ''
             self.JOURNEY_COLLECTION_NAME = ''
+            self.MENTEE_COLLECTION_NAME = ''
             self.RATING_COLLECTION_NAME = ''
             self.NOTE_COLLECTION_NAME = ''
             self.LOGIN_COLLECTION_NAME = ''
@@ -157,6 +158,7 @@ class Config:
                 "PLAN_COLLECTION_NAME": "Plan",
                 "ENCOUNTER_COLLECTION_NAME": "Encounter",
                 "JOURNEY_COLLECTION_NAME": "Journey",
+                "MENTEE_COLLECTION_NAME": "Mentee",
                 "RATING_COLLECTION_NAME": "Rating",
                 "NOTE_COLLECTION_NAME": "Note",
                 "LOGIN_COLLECTION_NAME": "Login",
