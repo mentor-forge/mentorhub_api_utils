@@ -117,6 +117,18 @@ class Config:
             self.ROLE_COORDINATOR = ''
             self.ROLE_CUSTOMER = ''
             self.ROLE_ADMIN = ''
+
+            # Event Type Constants
+            self.EVENT_TYPE_LOGIN = ''
+            self.EVENT_TYPE_LOGOUT = ''
+            self.EVENT_TYPE_FAIL = ''
+            self.EVENT_TYPE_ARRIVED = ''
+            self.EVENT_TYPE_COMPLETED = ''
+            self.EVENT_TYPE_STARTED = ''
+            self.EVENT_TYPE_ENCOUNTER = ''
+            self.EVENT_TYPE_NOTE = ''
+            self.EVENT_TYPE_LINK = ''
+            self.EVENT_TYPE_ADVANCED = ''
             
             # Service Port numbers (defaults from specifications.architecture domains)
             self.SCHEMA_API_PORT = 0
@@ -178,6 +190,18 @@ class Config:
                 "ROLE_COORDINATOR": "coordinator",
                 "ROLE_CUSTOMER": "customer",
                 "ROLE_ADMIN": "admin",
+
+                # Event Type Constants (values mirror event_types in enumerations.0.yaml)
+                "EVENT_TYPE_LOGIN": "login",
+                "EVENT_TYPE_LOGOUT": "logout",
+                "EVENT_TYPE_FAIL": "fail",
+                "EVENT_TYPE_ARRIVED": "arrived",
+                "EVENT_TYPE_COMPLETED": "completed",
+                "EVENT_TYPE_STARTED": "started",
+                "EVENT_TYPE_ENCOUNTER": "encounter",
+                "EVENT_TYPE_NOTE": "note",
+                "EVENT_TYPE_LINK": "link",
+                "EVENT_TYPE_ADVANCED": "advanced",
             }
             
             self.config_ints = {
