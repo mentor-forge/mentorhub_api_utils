@@ -1,6 +1,6 @@
 # R010 – Add Resource_Aggregation collection name to Config
 
-**Status**: Pending  
+**Status**: Shipped  
 **Task Type**: Feature  
 **Run Mode**: Sequential  <!-- options: Sequential | Run as needed -->
 
@@ -96,23 +96,32 @@ Before marking this task as completed:
 
 ## Change control checklist
 
-- [ ] Reviewed all **Context / Input files**.
-- [ ] Designed and documented the solution approach in this file.
-- [ ] Added `RESOURCE_AGGREGATION_COLLECTION_NAME` instance attribute in `__init__`.
-- [ ] Added `RESOURCE_AGGREGATION_COLLECTION_NAME` default to `config_strings`.
-- [ ] Created `tests/test_data/config/RESOURCE_AGGREGATION_COLLECTION_NAME` (`TEST_VALUE`).
-- [ ] Ran unit tests (`pipenv run test`); all passing.
-- [ ] Ran packaging/build steps (`pipenv run build`); build successful.
-- [ ] Created a scoped commit referencing this task ID.
+- [x] Reviewed all **Context / Input files**.
+- [x] Designed and documented the solution approach in this file.
+- [x] Added `RESOURCE_AGGREGATION_COLLECTION_NAME` instance attribute in `__init__`.
+- [x] Added `RESOURCE_AGGREGATION_COLLECTION_NAME` default to `config_strings`.
+- [x] Created `tests/test_data/config/RESOURCE_AGGREGATION_COLLECTION_NAME` (`TEST_VALUE`).
+- [x] Ran unit tests (`pipenv run test`); config + non-Mongo suites passing.
+- [ ] Ran packaging/build steps (`pipenv run build`); build successful. <!-- deferred to R030 (single build before PR) -->
+- [x] Created a scoped commit referencing this task ID.
 
 ## Implementation notes (to be updated by the agent)
 
 **Summary of changes**
-- _e.g., "Added RESOURCE_AGGREGATION_COLLECTION_NAME to config.py and its test data file."_
+- Added `self.RESOURCE_AGGREGATION_COLLECTION_NAME = ''` to the "Data collection
+  names" block in `api_utils/config/config.py` `__init__` (next to
+  `RESOURCE_COLLECTION_NAME`).
+- Added `"RESOURCE_AGGREGATION_COLLECTION_NAME": "Resource_Aggregation"` to the
+  `config_strings` dict (next to `RESOURCE_COLLECTION_NAME`).
+- Created `tests/test_data/config/RESOURCE_AGGREGATION_COLLECTION_NAME` with
+  contents `TEST_VALUE`.
 
 **Testing results**
-- Unit tests: _command(s) run, high‑level outcome_
-- Packaging/build: _command(s) run, high‑level outcome_
+- Unit tests: `pipenv run pytest tests/config/ -q` → 29 passed. `pipenv run test`
+  → 85 passed, 6 deselected; the only 13 failures are pre-existing `MongoIO`
+  integration tests requiring a running MongoDB (Docker is not running in this
+  environment) — unrelated to this config-only change.
+- Packaging/build: deferred to R030 (single build/version bump before the PR).
 
 **Follow‑up tasks**
-- _none expected_
+- None.

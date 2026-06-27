@@ -101,6 +101,7 @@ class Config:
             self.DASHBOARD_COLLECTION_NAME = ''
             self.EVENT_COLLECTION_NAME = ''
             self.RESOURCE_COLLECTION_NAME = ''
+            self.RESOURCE_AGGREGATION_COLLECTION_NAME = ''
             self.PATH_COLLECTION_NAME = ''
             self.PLAN_COLLECTION_NAME = ''
             self.ENCOUNTER_COLLECTION_NAME = ''
@@ -161,6 +162,7 @@ class Config:
                 "DASHBOARD_COLLECTION_NAME": "Dashboard",
                 "EVENT_COLLECTION_NAME": "Event",
                 "RESOURCE_COLLECTION_NAME": "Resource",
+                "RESOURCE_AGGREGATION_COLLECTION_NAME": "Resource_Aggregation",
                 "PATH_COLLECTION_NAME": "Path",
                 "PLAN_COLLECTION_NAME": "Plan",
                 "ENCOUNTER_COLLECTION_NAME": "Encounter",
