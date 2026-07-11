@@ -47,6 +47,8 @@ def test_config_endpoint_returns_expected_structure():
     assert 'versions' in data, "Response missing 'versions' key"
     assert 'enumerators' in data, "Response missing 'enumerators' key"
     assert 'token' in data, "Response missing 'token' key"
+    assert data['token']['profile_id'] == "A00000000000000000000001"
+    assert data['token']['user_id'] == "adam"
 
 
 @pytest.mark.e2e
