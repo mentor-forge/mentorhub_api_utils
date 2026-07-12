@@ -5,7 +5,7 @@ This folder contains coding tasks that an orchestration agent can execute, based
 Review **Context** Before creating any task files you should review the following files for context:
 - ../mentorhub/DeveloperEdition/standards/api_standards.md
 - ./README.md
-- ./tasks/_ORCHESTRATION.md
+- ./tasks/_ORCHESTRATE.md
 - ./tasks/_PLANNING.md (this file)
 
 ## Task File Layout
@@ -82,12 +82,83 @@ Each task file must contain the following sections under H1 and H2 headings.
 
 ## External repository boundaries
 
-Task planning and execution in **this API repo** (`mentorhub_mentee_api`) must not read or depend on other sibling repositories for input context, except:
+Task planning and execution in **this library repo** (`mentorhub_api_utils`) may read sibling repos for **harvesting** or **documenting downstream adoption**, but orchestration commits only touch this repo.
+
+Allowed external context:
 
 - **`../mentorhub`** — platform standards and shared documentation (e.g. `DeveloperEdition/standards/api_standards.md`).
-- **`../mentorhub_api_utils`** — shared Python utilities used by domain APIs (e.g. `MongoIO`, Flask helpers, `README.md`).
+- **Domain API repos** — read-only reference when harvesting services or drafting downstream follow-on issues (e.g. `../mentorhub_mentee_api`, `../mentorhub_mentor_api`).
 
-Do **not** reference paths under `mentorhub_mongodb_api`, other domain API repos, SPAs, or CloudFormation repos in task **Context** or **Goals**. If work in another repository is a prerequisite, describe it as an **external prerequisite** in prose (e.g. “MongoDB dictionary must include field X”) and set **Status** to `Blocked` until a human confirms it — do not link to or read files in that repo.
+Do **not** orchestrate changes in domain API repos from this folder. Record downstream work in § [Downstream follow-on issues](#downstream-follow-on-issues) for humans or those repos' planning agents.
+
+## Standardized Get List pattern
+
+Replace the legacy **infinite-scroll** contract (`after_id`, `limit`, `{items, has_more, next_cursor}`) with **offset/size header pagination** and **query-parameter filters** on list endpoints.
+
+| Layer | Convention |
+|-------|------------|
+| Pagination headers | `offset` (default `0`), `size` (default `20`, max `100`) |
+| Response body | Plain JSON array |
+| Text contains | Query param → case-insensitive substring on field (e.g. `?description=onboard`) |
+| Enum in-list | Comma-separated query param → MongoDB `$in` (e.g. `?status=active,draft`) |
+| Scoped lists | Service supplies base `match` (RBAC, parent id); pagination applies within scope |
+| Order by | Query params `sort_by` + `order` (`asc`/`desc`); per-endpoint `order_spec` whitelists fields and defaults |
+| MongoDB I/O | `MongoIO.get_documents(..., skip=offset, limit=size)` via `list_query.execute_list_query` |
+
+Implementation tasks: `PENDING.R048` → `PENDING.R049` → (`PENDING.R050`–`PENDING.R052`, `PENDING.R055` in parallel) → `PENDING.R053` → `PENDING.R054`. Route-layer helpers live in `api_utils.flask_utils.list_request`; service/Mongo helpers in `api_utils.mongo_utils.list_query`.
+
+### Services audit (`api_utils/services/`)
+
+| Service | List method today | Pagination | Filters | Action (api_utils) |
+|---------|-------------------|------------|---------|-------------------|
+| `ResourceService` | `get_resources` | offset/size kwargs; **Python slice after full fetch** | none | R050 — DB pagination + `name`/`description`/`status` filters |
+| `PathService` | `get_paths` | none (returns all) | none | R051 — offset/size + optional `name` contains |
+| `NoteService` | `get_notes_for_resource` | none (returns all in scope) | none | R052 — offset/size + optional `status` in_list; composites fetch full set |
+| `EventService` | — (create only in api_utils) | n/a | n/a | R055 — add `get_events` with `type` in_list + optional `profile_id` scope |
+| `JourneyService` | — (`get_my_journey` single doc) | n/a | n/a | no list method |
+| `AggregationService` | — (per-resource reads) | n/a | n/a | no generic list; R052 adjusts embedded note fetch |
+
+**Not in scope for api_utils**: mentor-local list services (`ProfileService.get_profiles` dashboard, `EncounterService.get_encounters_for_mentee`, `PlanService.get_plans`, etc.) — migrate in `mentorhub_mentor_api` using the same `list_query` utilities after R054 ships.
+
+## Downstream follow-on issues
+
+Paste the blocks below into the target repo's `tasks/_PLANNING.md` planning session (or promote to `PENDING.*` task files there). **Blocked on** `api-utils>=0.5.0` (R054).
+
+### mentorhub_mentee_api
+
+**Issue — Adopt api-utils 0.5.0 Get List pattern (breaking: Path + composite notes)**
+
+Short description: Bump `api-utils` to `0.5.0` and align routes/OpenAPI with shared list utilities; fix breaking changes from paginated `PathService.get_paths` and `NoteService.get_notes_for_resource` defaults.
+
+Tasks to plan:
+
+1. **Bump dependency** — `Pipfile` / lockfile → `api-utils==0.5.0`; `pipenv run install`.
+2. **Resource list** — `src/routes/resource_routes.py`: use `parse_list_request` from `api_utils.flask_utils.list_request`; pass `filters` and `sort_by` into `ResourceService.get_resources`; document `name`/`description`/`status` filter query params and `sort_by`/`order` in `docs/openapi.yaml`.
+3. **Path list (breaking)** — `src/routes/path_routes.py`: read `offset`/`size` headers (defaults `0`/`20`); pass through to `PathService.get_paths`. Update `docs/openapi.yaml` and tests (`test/routes`, `test/e2e`) — response is no longer guaranteed full collection without paging.
+4. **Aggregation / resource detail** — verify composites still return full note lists after R052 (api_utils composites use explicit full fetch); add tests if note counts regress.
+5. **Tests** — update service/route mocks for new kwargs; E2E list endpoints assert header pagination and filter query params.
+
+External prerequisite: `mentorhub_api_utils` R048–R054 shipped and published.
+
+### mentorhub_mentor_api
+
+**Issue — Migrate mentor API lists off infinite scroll to Get List pattern**
+
+Short description: Replace all `execute_infinite_scroll_query` usage with `api_utils` Get List utilities; adopt shared harvested services where possible; align OpenAPI and E2E with offset/size headers and plain array responses.
+
+Tasks to plan (likely serial):
+
+1. **Bump dependency** — `api-utils==0.5.0` after R054 publish.
+2. **Resource list** — Delete local infinite-scroll `ResourceService.get_resources`; import `api_utils.services.ResourceService` (or extend for mentor-only CRUD in a thin wrapper). Route: remove `after_id`/`limit` cursor params; add `offset`/`size` headers, filter query params, and standardized `sort_by`/`order` query params per `order_spec`. Mentor CRUD (`create_resource`, `update_resource`) may remain in local wrapper delegating to MongoIO.
+3. **Event list** — Delete local infinite-scroll `EventService.get_events`; use `api_utils.services.EventService.get_events` with `offset`/`size` headers, `type`/`profile_id` filters, and `sort_by`/`order` per `EVENT_LIST_ORDER`. Keep local `get_event` by-id until separately harvested. Update `src/routes/event_routes.py` and `docs/openapi.yaml`.
+4. **Path list** — Align with api_utils `PathService` (pagination + `name` filter); remove duplicate local `path_service.py` list logic if harvesting path CRUD separately.
+5. **Plan list** — `PlanService.get_plans`: add offset/size headers (today returns full sorted list); optional `name` contains.
+6. **Scoped lists** — `EncounterService.get_encounters_for_mentee`: add pagination within `mentee_id` scope; `ProfileService.get_profiles` dashboard: evaluate pagination on mentee cards or document intentional full read.
+7. **Harvest alignment** — Prefer `api_utils.services` for Note/Event/Journey/Path/Resource read paths already harvested; keep mentor-only domains (Mentee, Encounter, Plan, Profile) local.
+8. **OpenAPI sweep** — Remove infinite-scroll response schemas; document header pagination on every GET list operation.
+9. **Tests** — Rewrite `test/e2e/test_resource.py`, `test/e2e/test_event.py`, and service tests expecting `{items, has_more, next_cursor}`.
+
+External prerequisite: `mentorhub_api_utils` R048–R054 shipped; `mentorhub_mentee_api` adoption validates the pattern.
 
 ## MongoDB dictionary schemas
 
