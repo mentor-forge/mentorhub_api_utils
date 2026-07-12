@@ -8,7 +8,15 @@ from bson import ObjectId
 
 from api_utils import MongoIO, Config
 from api_utils.mongo_utils import encode_document
+from api_utils.mongo_utils.list_query import (
+    DEFAULT_OFFSET,
+    DEFAULT_SIZE,
+    build_match_filter,
+    build_sort_by,
+    execute_list_query,
+)
 from api_utils.flask_utils.exceptions import (
+    HTTPBadRequest,
     HTTPForbidden,
     HTTPInternalServerError,
 )
@@ -19,6 +27,18 @@ logger = logging.getLogger(__name__)
 ID_PROPERTIES = ["_id", "profile_id", "resource_id", "journey_id"]
 DATE_PROPERTIES = []
 
+EVENT_LIST_FILTERS = {
+    "type": {"type": "in_list", "field": "type"},
+}
+
+EVENT_LIST_ORDER = {
+    "default": {"field": "created.at_time", "order": "desc"},
+    "allowed": {
+        "type": ("asc", "desc"),
+        "created.at_time": ("asc", "desc"),
+    },
+}
+
 
 class EventService:
     """
@@ -27,7 +47,7 @@ class EventService:
 
     @staticmethod
     def _check_permission(token, operation):
-        """Any authenticated user may create events."""
+        """Any authenticated user may create and read events."""
         pass
 
     @staticmethod
@@ -84,3 +104,70 @@ class EventService:
             error_msg = str(e)
             logger.error(f"Error creating event: {error_msg}")
             raise HTTPInternalServerError(f"Failed to create event: {error_msg}")
+
+    @staticmethod
+    def get_events(
+        token,
+        breadcrumb,
+        offset=DEFAULT_OFFSET,
+        size=DEFAULT_SIZE,
+        filters=None,
+        sort_by=None,
+        *,
+        profile_id=None,
+    ):
+        """
+        Get a paginated array of event documents.
+
+        Args:
+            token: Authentication token
+            breadcrumb: Audit breadcrumb
+            offset: Zero-based start index
+            size: Number of documents to return
+            filters: Parsed filter dict (optional type in_list)
+            sort_by: PyMongo sort list; default created.at_time desc
+            profile_id: Optional scope on context.profile_id
+
+        Returns:
+            list: Event documents
+        """
+        try:
+            EventService._check_permission(token, "read")
+
+            config = Config.get_instance()
+            base_match = {}
+            if profile_id is not None:
+                from bson.errors import InvalidId
+
+                try:
+                    base_match["context.profile_id"] = ObjectId(profile_id)
+                except (InvalidId, TypeError):
+                    raise HTTPBadRequest(
+                        "profile_id must be a valid MongoDB ObjectId"
+                    )
+
+            match = build_match_filter(base_match, filters or {}, EVENT_LIST_FILTERS)
+            if sort_by is None:
+                default = EVENT_LIST_ORDER["default"]
+                sort_by = build_sort_by(
+                    default["field"], default["order"], EVENT_LIST_ORDER
+                )
+
+            events = execute_list_query(
+                config.EVENT_COLLECTION_NAME,
+                match=match,
+                sort_by=sort_by,
+                offset=offset,
+                size=size,
+            )
+
+            logger.info(
+                f"Retrieved {len(events)} events (offset={offset}, size={size}) "
+                f"for user {token.get('user_id')}"
+            )
+            return events
+        except HTTPBadRequest:
+            raise
+        except Exception as e:
+            logger.error(f"Error retrieving events: {str(e)}")
+            raise HTTPInternalServerError("Failed to retrieve events")

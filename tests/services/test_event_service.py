@@ -4,6 +4,7 @@ Unit tests for Event service.
 
 import unittest
 from unittest.mock import patch, MagicMock
+from bson import ObjectId
 from api_utils.services.event_service import EventService
 from api_utils.flask_utils.exceptions import HTTPInternalServerError
 
@@ -182,6 +183,56 @@ class TestEventService(unittest.TestCase):
             EventService.create_event(
                 {"type": "link"}, self.mock_token, self.mock_breadcrumb
             )
+
+    @patch("api_utils.services.event_service.execute_list_query")
+    @patch("api_utils.services.event_service.Config.get_instance")
+    def test_get_events_success(self, mock_get_config, mock_execute_list):
+        mock_config = MagicMock()
+        mock_config.EVENT_COLLECTION_NAME = "Event"
+        mock_get_config.return_value = mock_config
+        mock_execute_list.return_value = [{"_id": "1", "type": "login"}]
+
+        events = EventService.get_events(self.mock_token, self.mock_breadcrumb)
+
+        self.assertEqual(len(events), 1)
+        mock_execute_list.assert_called_once()
+
+    @patch("api_utils.services.event_service.execute_list_query")
+    @patch("api_utils.services.event_service.Config.get_instance")
+    def test_get_events_profile_scope(self, mock_get_config, mock_execute_list):
+        mock_config = MagicMock()
+        mock_config.EVENT_COLLECTION_NAME = "Event"
+        mock_get_config.return_value = mock_config
+        mock_execute_list.return_value = []
+
+        EventService.get_events(
+            self.mock_token,
+            self.mock_breadcrumb,
+            profile_id="507f1f77bcf86cd799439011",
+        )
+
+        call_kwargs = mock_execute_list.call_args[1]
+        self.assertEqual(
+            call_kwargs["match"]["context.profile_id"],
+            ObjectId("507f1f77bcf86cd799439011"),
+        )
+
+    @patch("api_utils.services.event_service.execute_list_query")
+    @patch("api_utils.services.event_service.Config.get_instance")
+    def test_get_events_type_filter(self, mock_get_config, mock_execute_list):
+        mock_config = MagicMock()
+        mock_config.EVENT_COLLECTION_NAME = "Event"
+        mock_get_config.return_value = mock_config
+        mock_execute_list.return_value = []
+
+        EventService.get_events(
+            self.mock_token,
+            self.mock_breadcrumb,
+            filters={"type": ["login", "link"]},
+        )
+
+        call_kwargs = mock_execute_list.call_args[1]
+        self.assertEqual(call_kwargs["match"]["type"]["$in"], ["login", "link"])
 
 
 if __name__ == "__main__":
