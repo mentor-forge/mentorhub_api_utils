@@ -61,7 +61,7 @@ Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.2.0`). Releasing 
 - `api_utils/` - Main package containing:
   - `config/` - Configuration singleton with support for file, environment, and default values
   - `flask_utils/` - Flask-specific utilities (JSON encoder, token, breadcrumb)
-  - `mongo_utils/` - MongoDB utilities (MongoIO singleton, document encoding, infinite scroll)
+  - `mongo_utils/` - MongoDB utilities (MongoIO singleton, document encoding, list query, legacy infinite scroll)
   - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation)
   - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer)
 
@@ -76,6 +76,26 @@ from api_utils.services import JourneyService, PathService
 # or
 from api_utils import JourneyService, PathService
 ```
+
+### Standardized Get List pattern
+
+List endpoints use **offset/size request headers** (defaults `0` / `20`, max `100`), a plain JSON **array** response body, **query-parameter filters** (`contains`, `in_list`), and **order-by** query params (`sort_by`, `order`) validated per-endpoint via `order_spec`.
+
+```python
+from api_utils.flask_utils.list_request import parse_list_request
+from api_utils.services.resource_service import (
+    ResourceService,
+    RESOURCE_LIST_FILTERS,
+    RESOURCE_LIST_ORDER,
+)
+
+offset, size, filters, sort_by = parse_list_request(
+    request, RESOURCE_LIST_FILTERS, RESOURCE_LIST_ORDER
+)
+items = ResourceService.get_resources(token, breadcrumb, offset, size, filters, sort_by)
+```
+
+Legacy `execute_infinite_scroll_query` is **deprecated** — migrate domain APIs to `list_query.execute_list_query`.
 
 ## Domain APIs vs. this library
 
