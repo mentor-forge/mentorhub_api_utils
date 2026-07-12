@@ -1,6 +1,6 @@
 # R049 – Add standardized Get List query utilities
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R048_add_mongoio_skip_limit`  
 **Description**: Introduce shared pagination constants, validation, extensible query-parameter parsing (filters **and order-by**), and a MongoIO-backed paginated list executor to replace the cursor-based `execute_infinite_scroll_query` pattern.
@@ -110,4 +110,6 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Added `list_query.py` and `list_request.py` with pagination, filter, and order-by helpers.
+- Fixed circular import by importing `MongoIO` from `mongo_io` directly in `list_query`.
+- `pipenv run test`: 173 passed, 6 deselected.
