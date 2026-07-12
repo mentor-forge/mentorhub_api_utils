@@ -107,9 +107,7 @@ class ResourceService:
             if not ResourceService._is_admin(token, config):
                 base_match["status"] = {"$ne": ARCHIVED_STATUS}
 
-            match = build_match_filter(
-                base_match, filters or {}, RESOURCE_LIST_FILTERS
-            )
+            match = build_match_filter(base_match, filters or {}, RESOURCE_LIST_FILTERS)
             if sort_by is None:
                 default = RESOURCE_LIST_ORDER["default"]
                 sort_by = build_sort_by(

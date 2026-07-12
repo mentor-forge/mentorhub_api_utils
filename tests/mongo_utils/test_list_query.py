@@ -94,9 +94,7 @@ class TestOrderBy(unittest.TestCase):
 
 class TestExecuteListQuery(unittest.TestCase):
     @patch("api_utils.mongo_utils.list_query.MongoIO.get_instance")
-    def test_execute_list_query_calls_mongo_with_skip_limit(
-        self, mock_get_mongo
-    ):
+    def test_execute_list_query_calls_mongo_with_skip_limit(self, mock_get_mongo):
         mock_mongo = MagicMock()
         mock_mongo.get_documents.return_value = [{"_id": "1"}]
         mock_get_mongo.return_value = mock_mongo

@@ -67,7 +67,9 @@ def execute_infinite_scroll_query(
     if limit > 100:
         raise HTTPBadRequest("limit must be <= 100")
     if sort_by not in allowed_sort_fields:
-        raise HTTPBadRequest(f"sort_by must be one of: {', '.join(allowed_sort_fields)}")
+        raise HTTPBadRequest(
+            f"sort_by must be one of: {', '.join(allowed_sort_fields)}"
+        )
     if order not in ("asc", "desc"):
         raise HTTPBadRequest("order must be 'asc' or 'desc'")
 

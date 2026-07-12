@@ -142,9 +142,7 @@ class EventService:
                 try:
                     base_match["context.profile_id"] = ObjectId(profile_id)
                 except (InvalidId, TypeError):
-                    raise HTTPBadRequest(
-                        "profile_id must be a valid MongoDB ObjectId"
-                    )
+                    raise HTTPBadRequest("profile_id must be a valid MongoDB ObjectId")
 
             match = build_match_filter(base_match, filters or {}, EVENT_LIST_FILTERS)
             if sort_by is None:

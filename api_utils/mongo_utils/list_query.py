@@ -91,9 +91,7 @@ def validate_order(field, order, order_spec):
     permitted_orders = allowed[field]
     if order not in permitted_orders:
         permitted = ", ".join(permitted_orders)
-        raise HTTPBadRequest(
-            f"order for '{field}' must be one of: {permitted}"
-        )
+        raise HTTPBadRequest(f"order for '{field}' must be one of: {permitted}")
 
 
 def build_sort_by(field, order, order_spec=None):
