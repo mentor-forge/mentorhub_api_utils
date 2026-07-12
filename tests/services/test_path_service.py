@@ -25,28 +25,27 @@ class TestPathService(unittest.TestCase):
             "correlation_id": "test-correlation-id",
         }
 
+    @patch("api_utils.services.path_service.execute_list_query")
     @patch("api_utils.services.path_service.Config.get_instance")
-    @patch("api_utils.services.path_service.MongoIO.get_instance")
-    def test_get_paths_returns_sorted_list(self, mock_get_mongo, mock_get_config):
-        """Test successful retrieval of all paths as a list."""
+    def test_get_paths_returns_sorted_list(self, mock_get_config, mock_execute_list):
+        """Test successful retrieval of paths as a paginated list."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
         mock_get_config.return_value = mock_config
 
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.return_value = [
+        mock_execute_list.return_value = [
             {"_id": ObjectId("507f1f77bcf86cd799439011"), "name": "alpha"},
             {"_id": ObjectId("507f1f77bcf86cd799439012"), "name": "beta"},
         ]
-        mock_get_mongo.return_value = mock_mongo
 
         result = PathService.get_paths(self.mock_token, self.mock_breadcrumb)
 
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
-        mock_mongo.get_documents.assert_called_once()
-        call_kwargs = mock_mongo.get_documents.call_args[1]
-        self.assertEqual(call_kwargs["sort_by"], [("name", 1)])
+        mock_execute_list.assert_called_once()
+        call_kwargs = mock_execute_list.call_args[1]
+        self.assertEqual(call_kwargs["offset"], 0)
+        self.assertEqual(call_kwargs["size"], 20)
 
     @patch("api_utils.services.resource_service.ResourceService.get_resources_by_ids")
     @patch("api_utils.services.path_service.Config.get_instance")
@@ -187,17 +186,14 @@ class TestPathService(unittest.TestCase):
             PathService.get_path("999", self.mock_token, self.mock_breadcrumb)
         self.assertIn("999", str(context.exception))
 
+    @patch("api_utils.services.path_service.execute_list_query")
     @patch("api_utils.services.path_service.Config.get_instance")
-    @patch("api_utils.services.path_service.MongoIO.get_instance")
-    def test_get_paths_handles_exception(self, mock_get_mongo, mock_get_config):
+    def test_get_paths_handles_exception(self, mock_get_config, mock_execute_list):
         """Test get_paths handles exceptions properly."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
         mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.side_effect = Exception("Database error")
-        mock_get_mongo.return_value = mock_mongo
+        mock_execute_list.side_effect = Exception("Database error")
 
         with self.assertRaises(HTTPInternalServerError):
             PathService.get_paths(self.mock_token, self.mock_breadcrumb)

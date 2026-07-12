@@ -191,7 +191,9 @@ class AggregationService:
 
             from api_utils.services.note_service import NoteService
 
-            notes = NoteService.get_notes_for_resource(resource_id, token, breadcrumb)
+            notes = NoteService.list_all_notes_for_resource(
+                resource_id, token, breadcrumb
+            )
 
             logger.info(
                 f"Retrieved aggregation detail for resource {resource_id} "

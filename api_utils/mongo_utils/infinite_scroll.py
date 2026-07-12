@@ -1,6 +1,11 @@
 """
 Infinite scroll (cursor-based pagination) utilities for MongoDB.
 
+.. deprecated::
+    Use ``api_utils.mongo_utils.list_query`` and ``api_utils.flask_utils.list_request``
+    for standardized offset/size list endpoints. This module remains for downstream
+    migration only and will be removed in a future release.
+
 Provides reusable logic for list endpoints with server-side pagination,
 sorting, and minimal name search.
 
@@ -26,6 +31,10 @@ def execute_infinite_scroll_query(
 ):
     """
     Execute a cursor-based infinite scroll query on a MongoDB collection.
+
+    .. deprecated::
+        Use ``list_query.execute_list_query`` with ``list_request.parse_list_request``
+        instead. See README § Standardized Get List pattern.
 
     Validates parameters, builds filter and sort, runs find().sort().limit(limit+1),
     then returns {items, limit, has_more, next_cursor}. Uses _id for cursor.
@@ -58,7 +67,9 @@ def execute_infinite_scroll_query(
     if limit > 100:
         raise HTTPBadRequest("limit must be <= 100")
     if sort_by not in allowed_sort_fields:
-        raise HTTPBadRequest(f"sort_by must be one of: {', '.join(allowed_sort_fields)}")
+        raise HTTPBadRequest(
+            f"sort_by must be one of: {', '.join(allowed_sort_fields)}"
+        )
     if order not in ("asc", "desc"):
         raise HTTPBadRequest("order must be 'asc' or 'desc'")
 

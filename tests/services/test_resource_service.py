@@ -34,19 +34,15 @@ class TestResourceService(unittest.TestCase):
         mock_config.ROLE_ADMIN = "admin"
         return mock_config
 
+    @patch("api_utils.services.resource_service.execute_list_query")
     @patch("api_utils.services.resource_service.Config.get_instance")
-    @patch("api_utils.services.resource_service.MongoIO.get_instance")
-    def test_get_resources_returns_array(self, mock_get_mongo, mock_get_config):
+    def test_get_resources_returns_array(self, mock_get_config, mock_execute_list):
         """Test successful retrieval returns a plain array."""
         mock_get_config.return_value = self._mock_config()
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.return_value = [
+        mock_execute_list.return_value = [
             {"_id": ObjectId("507f1f77bcf86cd799439011"), "name": "resource1"},
             {"_id": ObjectId("507f1f77bcf86cd799439012"), "name": "resource2"},
-            {"_id": ObjectId("507f1f77bcf86cd799439013"), "name": "resource3"},
         ]
-        mock_get_mongo.return_value = mock_mongo
 
         result = ResourceService.get_resources(
             self.mock_token, self.mock_breadcrumb, offset=0, size=2
@@ -54,28 +50,44 @@ class TestResourceService(unittest.TestCase):
 
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
-        mock_mongo.get_documents.assert_called_once()
-        call_kwargs = mock_mongo.get_documents.call_args[1]
+        mock_execute_list.assert_called_once()
+        call_kwargs = mock_execute_list.call_args[1]
         self.assertEqual(call_kwargs["match"]["status"], {"$ne": "archived"})
+        self.assertEqual(call_kwargs["offset"], 0)
+        self.assertEqual(call_kwargs["size"], 2)
 
+    @patch("api_utils.services.resource_service.execute_list_query")
     @patch("api_utils.services.resource_service.Config.get_instance")
-    @patch("api_utils.services.resource_service.MongoIO.get_instance")
     def test_get_resources_admin_includes_archived(
-        self, mock_get_mongo, mock_get_config
+        self, mock_get_config, mock_execute_list
     ):
         """Test admin users do not filter out archived resources."""
         mock_get_config.return_value = self._mock_config()
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.return_value = []
-        mock_get_mongo.return_value = mock_mongo
+        mock_execute_list.return_value = []
 
         ResourceService.get_resources(
             self.mock_admin_token, self.mock_breadcrumb, offset=0, size=20
         )
 
-        call_kwargs = mock_mongo.get_documents.call_args[1]
+        call_kwargs = mock_execute_list.call_args[1]
         self.assertEqual(call_kwargs["match"], {})
+
+    @patch("api_utils.services.resource_service.execute_list_query")
+    @patch("api_utils.services.resource_service.Config.get_instance")
+    def test_get_resources_applies_filters(self, mock_get_config, mock_execute_list):
+        """Test get_resources merges filter clauses into match."""
+        mock_get_config.return_value = self._mock_config()
+        mock_execute_list.return_value = []
+
+        ResourceService.get_resources(
+            self.mock_token,
+            self.mock_breadcrumb,
+            filters={"name": "alpha", "status": ["active"]},
+        )
+
+        call_kwargs = mock_execute_list.call_args[1]
+        self.assertEqual(call_kwargs["match"]["name"]["$regex"], "alpha")
+        self.assertEqual(call_kwargs["match"]["status"]["$in"], ["active"])
 
     @patch("api_utils.services.resource_service.Config.get_instance")
     @patch("api_utils.services.resource_service.MongoIO.get_instance")
@@ -198,7 +210,7 @@ class TestResourceService(unittest.TestCase):
             },
         )
 
-    @patch("api_utils.services.note_service.NoteService.get_notes_for_resource")
+    @patch("api_utils.services.note_service.NoteService.list_all_notes_for_resource")
     @patch(
         "api_utils.services.aggregation_service.AggregationService.get_aggregation_for_resource"
     )
@@ -254,15 +266,12 @@ class TestResourceService(unittest.TestCase):
             ResourceService.get_resource("999", self.mock_token, self.mock_breadcrumb)
         self.assertIn("999", str(context.exception))
 
+    @patch("api_utils.services.resource_service.execute_list_query")
     @patch("api_utils.services.resource_service.Config.get_instance")
-    @patch("api_utils.services.resource_service.MongoIO.get_instance")
-    def test_get_resources_handles_exception(self, mock_get_mongo, mock_get_config):
+    def test_get_resources_handles_exception(self, mock_get_config, mock_execute_list):
         """Test get_resources handles exceptions properly."""
         mock_get_config.return_value = self._mock_config()
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.side_effect = Exception("Database error")
-        mock_get_mongo.return_value = mock_mongo
+        mock_execute_list.side_effect = Exception("Database error")
 
         with self.assertRaises(HTTPInternalServerError):
             ResourceService.get_resources(self.mock_token, self.mock_breadcrumb)
