@@ -88,7 +88,7 @@ class TestAggregationService(unittest.TestCase):
                 "invalid", self.mock_token, self.mock_breadcrumb
             )
 
-    @patch("api_utils.services.note_service.NoteService.get_notes_for_resource")
+    @patch("api_utils.services.note_service.NoteService.list_all_notes_for_resource")
     @patch("api_utils.services.aggregation_service.Config.get_instance")
     @patch("api_utils.services.aggregation_service.MongoIO.get_instance")
     def test_get_aggregation_detail_existing(
@@ -118,7 +118,7 @@ class TestAggregationService(unittest.TestCase):
             self.resource_id, self.mock_token, self.mock_breadcrumb
         )
 
-    @patch("api_utils.services.note_service.NoteService.get_notes_for_resource")
+    @patch("api_utils.services.note_service.NoteService.list_all_notes_for_resource")
     @patch("api_utils.services.aggregation_service.Config.get_instance")
     @patch("api_utils.services.aggregation_service.MongoIO.get_instance")
     def test_get_aggregation_detail_creates_when_missing(

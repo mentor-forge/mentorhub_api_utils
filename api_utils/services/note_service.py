@@ -8,7 +8,14 @@ from bson import ObjectId
 
 from api_utils import MongoIO, Config
 from api_utils.mongo_utils import encode_document
-from pymongo import DESCENDING
+from api_utils.mongo_utils.list_query import (
+    DEFAULT_OFFSET,
+    DEFAULT_SIZE,
+    MAX_SIZE,
+    build_match_filter,
+    build_sort_by,
+    execute_list_query,
+)
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
     HTTPForbidden,
@@ -20,6 +27,15 @@ logger = logging.getLogger(__name__)
 
 ID_PROPERTIES = ["_id", "resource_id", "profile_id"]
 DATE_PROPERTIES = []
+
+NOTE_LIST_FILTERS = {
+    "status": {"type": "in_list", "field": "status"},
+}
+
+NOTE_LIST_ORDER = {
+    "default": {"field": "created.at_time", "order": "desc"},
+    "allowed": {"created.at_time": ("asc", "desc")},
+}
 
 
 class NoteService:
@@ -71,14 +87,26 @@ class NoteService:
             raise HTTPInternalServerError(f"Failed to create note: {error_msg}")
 
     @staticmethod
-    def get_notes_for_resource(resource_id, token, breadcrumb):
+    def get_notes_for_resource(
+        resource_id,
+        token,
+        breadcrumb,
+        offset=DEFAULT_OFFSET,
+        size=DEFAULT_SIZE,
+        filters=None,
+        sort_by=None,
+    ):
         """
-        Retrieve all notes for a resource.
+        Retrieve paginated notes for a resource.
 
         Args:
             resource_id: The resource ID to look up
             token: Authentication token
             breadcrumb: Audit breadcrumb
+            offset: Zero-based start index
+            size: Number of documents to return
+            filters: Parsed filter dict (optional status in_list)
+            sort_by: PyMongo sort list; default created.at_time desc
 
         Returns:
             list: Note documents for the resource
@@ -93,12 +121,21 @@ class NoteService:
             except (InvalidId, TypeError):
                 raise HTTPBadRequest("resource_id must be a valid MongoDB ObjectId")
 
-            mongo = MongoIO.get_instance()
             config = Config.get_instance()
-            notes = mongo.get_documents(
+            base_match = {"resource_id": resource_object_id}
+            match = build_match_filter(base_match, filters or {}, NOTE_LIST_FILTERS)
+            if sort_by is None:
+                default = NOTE_LIST_ORDER["default"]
+                sort_by = build_sort_by(
+                    default["field"], default["order"], NOTE_LIST_ORDER
+                )
+
+            notes = execute_list_query(
                 config.NOTE_COLLECTION_NAME,
-                match={"resource_id": resource_object_id},
-                sort_by=[("created.at_time", DESCENDING)],
+                match=match,
+                sort_by=sort_by,
+                offset=offset,
+                size=size,
             )
 
             logger.info(
@@ -113,3 +150,14 @@ class NoteService:
             raise HTTPInternalServerError(
                 f"Failed to retrieve notes for resource {resource_id}"
             )
+
+    @staticmethod
+    def list_all_notes_for_resource(resource_id, token, breadcrumb):
+        """Return all notes for a resource (composite/detail reads)."""
+        return NoteService.get_notes_for_resource(
+            resource_id,
+            token,
+            breadcrumb,
+            offset=0,
+            size=MAX_SIZE,
+        )

@@ -210,7 +210,7 @@ class TestResourceService(unittest.TestCase):
             },
         )
 
-    @patch("api_utils.services.note_service.NoteService.get_notes_for_resource")
+    @patch("api_utils.services.note_service.NoteService.list_all_notes_for_resource")
     @patch(
         "api_utils.services.aggregation_service.AggregationService.get_aggregation_for_resource"
     )

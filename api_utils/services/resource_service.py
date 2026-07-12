@@ -237,7 +237,9 @@ class ResourceService:
             aggregation = AggregationService.get_aggregation_for_resource(
                 resource_id, token, breadcrumb
             )
-            notes = NoteService.get_notes_for_resource(resource_id, token, breadcrumb)
+            notes = NoteService.list_all_notes_for_resource(
+                resource_id, token, breadcrumb
+            )
 
             logger.info(
                 f"Retrieved resource detail { resource_id} for user {token.get('user_id')}"

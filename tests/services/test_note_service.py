@@ -71,24 +71,21 @@ class TestNoteService(unittest.TestCase):
         self.assertEqual(str(result["_id"]), CREATED_ID)
         self.assertNotEqual(str(result["_id"]), "should-be-removed")
 
+    @patch("api_utils.services.note_service.execute_list_query")
     @patch("api_utils.services.note_service.Config.get_instance")
-    @patch("api_utils.services.note_service.MongoIO.get_instance")
-    def test_get_notes_for_resource_success(self, mock_get_mongo, mock_get_config):
+    def test_get_notes_for_resource_success(self, mock_get_config, mock_execute_list):
         mock_config = MagicMock()
         mock_config.NOTE_COLLECTION_NAME = "Note"
         mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.return_value = [{"_id": "1", "note": "a"}]
-        mock_get_mongo.return_value = mock_mongo
+        mock_execute_list.return_value = [{"_id": "1", "note": "a"}]
 
         notes = NoteService.get_notes_for_resource(
             self.resource_id, self.mock_token, self.mock_breadcrumb
         )
 
         self.assertEqual(len(notes), 1)
-        mock_mongo.get_documents.assert_called_once()
-        call_kwargs = mock_mongo.get_documents.call_args[1]
+        mock_execute_list.assert_called_once()
+        call_kwargs = mock_execute_list.call_args[1]
         self.assertEqual(
             call_kwargs["match"]["resource_id"], ObjectId(self.resource_id)
         )
