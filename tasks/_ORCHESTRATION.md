@@ -6,24 +6,33 @@ This folder contains coding tasks that an orchestration agent can execute, based
 
 Before starting the workflow, check to make sure you are not on the main branch, and that you can push on the branch you are on. If you fail this test, pause and ask the developer how you should proceed, and then select or create a branch as instructed before starting the first task.
 
-Now orchestrate all Pending Tasks as outlined below. Use an **orchestration agent** that spawns a **fresh agent per task**:
+Now orchestrate all Pending Tasks as outlined below. Use an **orchestration agent** that spawns a **fresh agent per task**.
+
+**One task, one commit.** Do **not** batch multiple tasks into a single commit. Each shipped task must produce exactly one commit on the feature branch so the pull request lists every task as a separate commit for review.
+
+Per-task loop (repeat until no `PENDING.*` tasks remain):
 
 1. **Orchestrator** discovers all tasks, respects dependencies, and determines execution order.
    - **Task Selection**: Select only `PENDING.*` tasks.
    - **Execution order**: Review all PENDING tasks and order dependencies first.
-   - Schedule **concurrent** agents if no dependencies exist.
-2. **For each task**, the orchestrator launches a new agent with:
+   - Run tasks **serially** when dependencies exist; schedule concurrent agents only when tasks are truly independent.
+2. **For the current task**, the orchestrator launches a new agent with:
    - The task file path
-   - Any outputs from prior tasks (e.g. "L010 complete; Profile schema updated in openapi.yaml")
-3. **Sub-agent** executes only that task: read context, implement, test, update task notes.
-4. **Orchestrator Confirmation**: The orchestrator should repeat drop/config testing as outlined in the task.
-4. **Commit Changes**: The orchestrator is responsible for a commit, with a meaningful message, and a push.
-5. **Mark Shipped** by updating the task status, and renaming the task file like `SHIPPED.T010_update_profile_data.md`.
-6. **Orchestrator** after the commit, moves to the next task.
+   - Any outputs from prior tasks (e.g. "R041 complete; NoteService harvested to api_utils.services")
+3. **Sub-agent** executes only that task: read context, implement, test, update **Execution Notes**.
+4. **Orchestrator confirmation**: Repeat testing as outlined in the task's **Testing Expectations**.
+5. **Mark Shipped**: Update the task **Status** to `Shipped` and rename the file prefix from `PENDING.` to `SHIPPED.` (e.g. `SHIPPED.R041.harvest_note_service.md`). Include the task file rename in the same commit as the implementation.
+6. **Commit and push** — **required before starting the next task**:
+   - Stage only files for this task (implementation, tests, and the renamed/shipped task file).
+   - Create **one commit** with a message that references the task ID (first line), e.g. `R041: Harvest NoteService into api_utils.services`.
+   - Push the branch so the PR commit list stays up to date.
+7. **Next task**: Return to step 1 for the next `PENDING.*` task in dependency order.
 
 **Task Failure Case**: In the event a task fails, execution should halt and the developer should receive a summary of the current state and error condition that caused the failure.
 
-**All Tasks Complete**: Once all tasks have successfully completed, the orchestration agent should create a Pull Request in **this API repository** with a meaningful summary of all the commits made during the workflow. Notify the developer that the workflow was completed and provide a link to the PR, and a reminder to the developer to **return to main**, **sync**, and run **pipenv run tag-release**
+**All Tasks Complete**: Once all tasks have successfully completed, create a Pull Request in **this API repository** with a summary that references each task commit (the PR should show one commit per task, not one squashed commit). Notify the developer that the workflow was completed, provide a link to the PR, and remind them to **return to main**, **sync**, and run **pipenv run tag-release**.
+
+Do **not** squash task commits when opening the PR unless the developer explicitly requests it.
 
 ## Implementation Details
 - **Recommended filename pattern**:
@@ -56,3 +65,8 @@ The steps below apply to the agent that executes a task.
 
 3. **Completion and documentation**
    - After successful testing, update **Execution Notes** with summary and test results.
+
+4. **Commit (mandatory, one per task)**
+   - Mark the task **Shipped** and rename `PENDING.*` → `SHIPPED.*` in the same commit as the code changes.
+   - Commit message first line must include the task ID (e.g. `R048: Bump minor version to 0.4.0`).
+   - Push before picking up the next task.
