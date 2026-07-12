@@ -62,9 +62,20 @@ Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.2.0`). Releasing 
   - `config/` - Configuration singleton with support for file, environment, and default values
   - `flask_utils/` - Flask-specific utilities (JSON encoder, token, breadcrumb)
   - `mongo_utils/` - MongoDB utilities (MongoIO singleton, document encoding, infinite scroll)
+  - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation)
   - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer)
 
 - `tests/` - Test suite for all components
+
+### Shared domain services
+
+Domain APIs import service classes from `api_utils.services` (or top-level `api_utils`) rather than maintaining duplicate `src/services/` copies:
+
+```python
+from api_utils.services import JourneyService, PathService
+# or
+from api_utils import JourneyService, PathService
+```
 
 ## Domain APIs vs. this library
 
