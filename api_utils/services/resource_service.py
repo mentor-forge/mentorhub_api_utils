@@ -11,17 +11,37 @@ from api_utils.flask_utils.exceptions import (
     HTTPNotFound,
     HTTPInternalServerError,
 )
+from api_utils.mongo_utils.list_query import (
+    DEFAULT_OFFSET,
+    DEFAULT_SIZE,
+    build_match_filter,
+    build_sort_by,
+    execute_list_query,
+)
 import logging
 
 from bson import ObjectId
-from pymongo import ASCENDING
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OFFSET = 0
-DEFAULT_SIZE = 20
-MAX_SIZE = 100
 ARCHIVED_STATUS = "archived"
+
+RESOURCE_LIST_FILTERS = {
+    "name": {"type": "contains", "field": "name"},
+    "description": {"type": "contains", "field": "description"},
+    "status": {"type": "in_list", "field": "status"},
+}
+
+RESOURCE_LIST_ORDER = {
+    "default": {"field": "name", "order": "asc"},
+    "allowed": {
+        "name": ("asc", "desc"),
+        "description": ("asc", "desc"),
+        "status": ("asc", "desc"),
+        "created.at_time": ("asc", "desc"),
+        "saved.at_time": ("asc", "desc"),
+    },
+}
 
 
 class ResourceService:
@@ -54,16 +74,14 @@ class ResourceService:
         return admin_role in token.get("roles", [])
 
     @staticmethod
-    def _validate_pagination(offset, size):
-        if offset < 0:
-            raise HTTPBadRequest("offset must be >= 0")
-        if size < 1:
-            raise HTTPBadRequest("size must be >= 1")
-        if size > MAX_SIZE:
-            raise HTTPBadRequest(f"size must be <= {MAX_SIZE}")
-
-    @staticmethod
-    def get_resources(token, breadcrumb, offset=DEFAULT_OFFSET, size=DEFAULT_SIZE):
+    def get_resources(
+        token,
+        breadcrumb,
+        offset=DEFAULT_OFFSET,
+        size=DEFAULT_SIZE,
+        filters=None,
+        sort_by=None,
+    ):
         """
         Get a paginated array of resource documents.
 
@@ -72,6 +90,8 @@ class ResourceService:
             breadcrumb: Audit breadcrumb
             offset: Zero-based start index
             size: Number of documents to return
+            filters: Parsed filter dict from parse_filter_params
+            sort_by: PyMongo sort list from build_sort_by; default name asc
 
         Returns:
             list: Resource documents
@@ -81,21 +101,28 @@ class ResourceService:
         """
         try:
             ResourceService._check_permission(token, "read")
-            ResourceService._validate_pagination(offset, size)
 
-            mongo = MongoIO.get_instance()
             config = Config.get_instance()
-
-            query = {}
+            base_match = {}
             if not ResourceService._is_admin(token, config):
-                query["status"] = {"$ne": ARCHIVED_STATUS}
+                base_match["status"] = {"$ne": ARCHIVED_STATUS}
 
-            documents = mongo.get_documents(
-                config.RESOURCE_COLLECTION_NAME,
-                match=query,
-                sort_by=[("name", ASCENDING)],
+            match = build_match_filter(
+                base_match, filters or {}, RESOURCE_LIST_FILTERS
             )
-            resources = documents[offset : offset + size]
+            if sort_by is None:
+                default = RESOURCE_LIST_ORDER["default"]
+                sort_by = build_sort_by(
+                    default["field"], default["order"], RESOURCE_LIST_ORDER
+                )
+
+            resources = execute_list_query(
+                config.RESOURCE_COLLECTION_NAME,
+                match=match,
+                sort_by=sort_by,
+                offset=offset,
+                size=size,
+            )
 
             logger.info(
                 f"Retrieved {len(resources)} resources (offset={offset}, size={size}) "
