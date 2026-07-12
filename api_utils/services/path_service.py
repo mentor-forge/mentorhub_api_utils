@@ -6,15 +6,30 @@ Handles RBAC checks and MongoDB operations for Path domain.
 
 from api_utils import MongoIO, Config
 from api_utils.flask_utils.exceptions import (
+    HTTPBadRequest,
     HTTPForbidden,
     HTTPNotFound,
     HTTPInternalServerError,
 )
+from api_utils.mongo_utils.list_query import (
+    DEFAULT_OFFSET,
+    DEFAULT_SIZE,
+    build_match_filter,
+    build_sort_by,
+    execute_list_query,
+)
 import logging
 
-from pymongo import ASCENDING
-
 logger = logging.getLogger(__name__)
+
+PATH_LIST_FILTERS = {
+    "name": {"type": "contains", "field": "name"},
+}
+
+PATH_LIST_ORDER = {
+    "default": {"field": "name", "order": "asc"},
+    "allowed": {"name": ("asc", "desc")},
+}
 
 
 class PathService:
@@ -80,27 +95,49 @@ class PathService:
         return enriched
 
     @staticmethod
-    def get_paths(token, breadcrumb):
+    def get_paths(
+        token,
+        breadcrumb,
+        offset=DEFAULT_OFFSET,
+        size=DEFAULT_SIZE,
+        filters=None,
+        sort_by=None,
+    ):
         """
-        Get all path documents sorted by name ascending.
+        Get paginated path documents.
 
         Args:
             token: Authentication token
             breadcrumb: Audit breadcrumb
+            offset: Zero-based start index
+            size: Number of documents to return
+            filters: Parsed filter dict (optional name contains)
+            sort_by: PyMongo sort list; default name asc
 
         Returns:
-            list: Path documents sorted by name
+            list: Path documents
         """
         try:
             PathService._check_permission(token, "read")
-            mongo = MongoIO.get_instance()
             config = Config.get_instance()
-            paths = mongo.get_documents(
+            match = build_match_filter({}, filters or {}, PATH_LIST_FILTERS)
+            if sort_by is None:
+                default = PATH_LIST_ORDER["default"]
+                sort_by = build_sort_by(
+                    default["field"], default["order"], PATH_LIST_ORDER
+                )
+
+            paths = execute_list_query(
                 config.PATH_COLLECTION_NAME,
-                sort_by=[("name", ASCENDING)],
+                match=match,
+                sort_by=sort_by,
+                offset=offset,
+                size=size,
             )
             logger.info(f"Retrieved {len(paths)} paths for user {token.get('user_id')}")
             return paths
+        except HTTPBadRequest:
+            raise
         except Exception as e:
             logger.error(f"Error retrieving paths: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve paths")
