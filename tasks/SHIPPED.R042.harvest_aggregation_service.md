@@ -1,6 +1,6 @@
 # R042 – Harvest AggregationService into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R041_harvest_note_service`  
 **Description**: Move `AggregationService` from `mentorhub_mentee_api` into `api_utils.services.aggregation_service` with unit tests.

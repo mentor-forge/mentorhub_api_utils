@@ -1,6 +1,6 @@
 # R043 – Harvest EventService into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R042_harvest_aggregation_service`  
 **Description**: Move `EventService` from `mentorhub_mentee_api` into `api_utils.services.event_service` with unit tests.

@@ -1,6 +1,6 @@
 # R046 – Harvest JourneyService into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R045_harvest_path_service`  
 **Description**: Move `JourneyService` from `mentorhub_mentee_api` into `api_utils.services.journey_service` with unit tests.

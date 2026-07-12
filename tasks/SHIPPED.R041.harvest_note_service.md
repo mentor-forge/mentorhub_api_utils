@@ -1,6 +1,6 @@
 # R041 – Harvest NoteService into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R040_scaffold_services_package`  
 **Description**: Move `NoteService` from `mentorhub_mentee_api` into `api_utils.services.note_service` with unit tests.

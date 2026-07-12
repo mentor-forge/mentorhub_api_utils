@@ -1,6 +1,6 @@
 # R040 – Scaffold api_utils.services package
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: none  
 **Description**: Create the `api_utils/services/` package skeleton and document the harvest workflow that lifts mentee API static service classes into shared library code.

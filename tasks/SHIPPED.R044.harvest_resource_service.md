@@ -1,6 +1,6 @@
 # R044 – Harvest ResourceService into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R043_harvest_event_service`  
 **Description**: Move `ResourceService` from `mentorhub_mentee_api` into `api_utils.services.resource_service` with unit tests.

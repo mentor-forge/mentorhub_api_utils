@@ -1,6 +1,6 @@
 # R048 – Bump minor version before opening PR
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R047_export_services_public_api`  
 **Description**: Bump the **minor** version of the `api-utils` package to reflect the new `api_utils.services` module before opening the harvest feature PR.

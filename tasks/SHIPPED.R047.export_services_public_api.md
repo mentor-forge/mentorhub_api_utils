@@ -1,6 +1,6 @@
 # R047 – Export shared services from api_utils public API
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R046_harvest_journey_service`  
 **Description**: Wire harvested service classes into the top-level `api_utils` package exports and document adoption for domain APIs.

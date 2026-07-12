@@ -1,6 +1,6 @@
 # R045 – Harvest PathService into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R044_harvest_resource_service`  
 **Description**: Move `PathService` from `mentorhub_mentee_api` into `api_utils.services.path_service` with unit tests.
