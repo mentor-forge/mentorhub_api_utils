@@ -155,7 +155,15 @@ class MongoIO:
             logger.error(f"Failed to drop collection: {e}")
             raise e
       
-    def get_documents(self, collection_name, match=None, project=None, sort_by=None):
+    def get_documents(
+        self,
+        collection_name,
+        match=None,
+        project=None,
+        sort_by=None,
+        skip=None,
+        limit=None,
+    ):
         """
         Retrieve a list of documents based on a match, projection, and optional sorting.
 
@@ -164,11 +172,21 @@ class MongoIO:
             match (dict, optional): MongoDB match filter. Defaults to {}.
             project (dict, optional): Fields to include or exclude. Defaults to None.
             sort_by (list of tuple, optional): Sorting criteria (e.g., [('field1', ASCENDING), ('field2', DESCENDING)]). Defaults to None.
+            skip (int, optional): Number of documents to skip. Defaults to None (no skip).
+            limit (int, optional): Maximum number of documents to return. Defaults to None (no limit).
 
         Returns:
             list: List of documents matching the query.
+
+        Raises:
+            ValueError: If skip is negative or limit is less than 1.
         """
         if not self.connected: raise Exception("get_documents when Mongo Not Connected")
+
+        if skip is not None and skip < 0:
+            raise ValueError("skip must be >= 0")
+        if limit is not None and limit < 1:
+            raise ValueError("limit must be >= 1")
 
         # Default match and projection
         match = match or {}
@@ -177,7 +195,12 @@ class MongoIO:
         try:
             collection = self.get_collection(collection_name)
             cursor = collection.find(match, project)
-            if sort_by: cursor = cursor.sort(sort_by)
+            if sort_by:
+                cursor = cursor.sort(sort_by)
+            if skip is not None:
+                cursor = cursor.skip(skip)
+            if limit is not None:
+                cursor = cursor.limit(limit)
 
             documents = list(cursor)
             return documents

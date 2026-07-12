@@ -140,6 +140,25 @@ class TestMongoIO(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "Charlie")
 
+    def test_get_documents_skip_and_limit(self):
+        order = [("sort_value", ASCENDING)]
+        project = {"_id": 0, "name": 1, "sort_value": 1}
+        result = self.mongo_io.get_documents(
+            self.test_collection_name,
+            {},
+            project,
+            order,
+            skip=1,
+            limit=2,
+        )
+        self.assertEqual([doc["name"] for doc in result], ["Bravo", "Charlie"])
+
+    def test_get_documents_skip_limit_validation(self):
+        with self.assertRaises(ValueError):
+            self.mongo_io.get_documents(self.test_collection_name, skip=-1)
+        with self.assertRaises(ValueError):
+            self.mongo_io.get_documents(self.test_collection_name, limit=0)
+
     def test_upsert_document(self):
         match = {"name": "Foxtrot"}
         data = {"sort_value": 6, "status": "active"}

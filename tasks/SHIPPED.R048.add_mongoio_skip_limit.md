@@ -1,6 +1,6 @@
 # R048 – Add skip/limit to MongoIO.get_documents
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R047_export_services_public_api`  
 **Description**: Extend `MongoIO.get_documents` with optional `skip` and `limit` parameters so list queries paginate in MongoDB instead of loading full collections into Python.
@@ -48,4 +48,6 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Added optional `skip`/`limit` to `MongoIO.get_documents`; validates `skip >= 0` and `limit >= 1`.
+- Added integration tests for paginated window and validation errors.
+- `pipenv run test`: 158 passed, 6 deselected.
