@@ -1,6 +1,6 @@
 # R056 – Extend Resource list filters (url, interests, technologies, skill_level)
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: none  
 **Description**: Extend `RESOURCE_LIST_FILTERS` so Resource list endpoints can filter by `url`, `interests`, `technologies`, and `skill_level` using existing `contains` / `in_list` types, without changing pagination, order, or AND composition.
@@ -75,4 +75,17 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+**Plan**: Extend `RESOURCE_LIST_FILTERS` only — add `url` (`contains`), `interests` / `technologies` / `skill_level` (`in_list`); leave `RESOURCE_LIST_ORDER`, `get_resources`, and `list_query.py` unchanged.
+
+**Changes**:
+- `api_utils/services/resource_service.py` — added four filter entries to `RESOURCE_LIST_FILTERS`.
+
+**Test results**:
+- `pipenv run test tests/services/test_resource_service.py` — passed
+- `pipenv run test tests/mongo_utils/test_list_query.py` — passed
+- `pipenv run test` — 177 passed, 6 deselected
+- `pipenv run black --check api_utils/services/resource_service.py` — unchanged (clean)
+- `pipenv run lint` — fails repo-wide (26 unrelated files would be reformatted; R056 output file clean; pre-existing)
+- `pipenv run build` — succeeded (`api_utils-0.5.0` sdist + wheel)
+
+**Out of scope (deferred)**: R057 new filter unit coverage; R058 version bump.

@@ -30,6 +30,10 @@ RESOURCE_LIST_FILTERS = {
     "name": {"type": "contains", "field": "name"},
     "description": {"type": "contains", "field": "description"},
     "status": {"type": "in_list", "field": "status"},
+    "url": {"type": "contains", "field": "url"},
+    "interests": {"type": "in_list", "field": "interests"},
+    "technologies": {"type": "in_list", "field": "technologies"},
+    "skill_level": {"type": "in_list", "field": "skill_level"},
 }
 
 RESOURCE_LIST_ORDER = {
