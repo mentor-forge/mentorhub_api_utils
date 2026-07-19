@@ -89,6 +89,37 @@ class TestResourceService(unittest.TestCase):
         self.assertEqual(call_kwargs["match"]["name"]["$regex"], "alpha")
         self.assertEqual(call_kwargs["match"]["status"]["$in"], ["active"])
 
+    @patch("api_utils.services.resource_service.execute_list_query")
+    @patch("api_utils.services.resource_service.Config.get_instance")
+    def test_get_resources_applies_multi_field_filters(
+        self, mock_get_config, mock_execute_list
+    ):
+        """Test get_resources merges url/interests/technologies/skill_level into match."""
+        mock_get_config.return_value = self._mock_config()
+        mock_execute_list.return_value = []
+
+        ResourceService.get_resources(
+            self.mock_token,
+            self.mock_breadcrumb,
+            filters={
+                "name": "alpha",
+                "url": "example.com",
+                "interests": ["python"],
+                "technologies": ["flask", "mongo"],
+                "skill_level": ["beginner"],
+            },
+        )
+
+        match = mock_execute_list.call_args[1]["match"]
+        self.assertEqual(match["status"], {"$ne": "archived"})
+        self.assertEqual(match["name"]["$regex"], "alpha")
+        self.assertEqual(match["name"]["$options"], "i")
+        self.assertEqual(match["url"]["$regex"], "example.com")
+        self.assertEqual(match["url"]["$options"], "i")
+        self.assertEqual(match["interests"]["$in"], ["python"])
+        self.assertEqual(match["technologies"]["$in"], ["flask", "mongo"])
+        self.assertEqual(match["skill_level"]["$in"], ["beginner"])
+
     @patch("api_utils.services.resource_service.Config.get_instance")
     @patch("api_utils.services.resource_service.MongoIO.get_instance")
     def test_get_resources_invalid_offset(self, mock_get_mongo, mock_get_config):

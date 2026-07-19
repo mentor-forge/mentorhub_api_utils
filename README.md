@@ -50,7 +50,7 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.5.0`). Releasing is two steps:
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.5.1`). Releasing is two steps:
 - Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
 - After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
 
