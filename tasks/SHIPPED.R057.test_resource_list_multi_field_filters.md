@@ -1,6 +1,6 @@
 # R057 – Unit tests for Resource multi-field list filters
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R056_extend_resource_list_filters`  
 **Description**: Add unit tests covering the new Resource list filters (`url`, `interests`, `technologies`, `skill_level`): empty/omitted, match clauses, no-clause when blank, and combined AND with existing filters.
@@ -59,4 +59,20 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+**Plan**: Add unit coverage that imports real `RESOURCE_LIST_FILTERS` from `resource_service` for empty/omitted, contains/`in_list` match clauses, whitespace blank omission, and combined AND with existing filters; assert `get_resources` merges new params into `execute_list_query` match; add `parse_list_request` coverage via the real service filter/order specs. Leave production filter code unchanged.
+
+**Changes**:
+- `tests/mongo_utils/test_list_query.py` — `TestResourceMultiFieldFilters` (5 cases) importing service `RESOURCE_LIST_FILTERS`
+- `tests/services/test_resource_service.py` — `test_get_resources_applies_multi_field_filters`
+- `tests/flask_utils/test_list_request.py` — `test_parse_list_request_resource_multi_field_filters` using real service specs
+
+**Test results**:
+- `pipenv run test tests/mongo_utils/test_list_query.py` — 184 passed, 6 deselected (script runs full suite)
+- `pipenv run test tests/services/test_resource_service.py` — 184 passed, 6 deselected
+- `pipenv run test tests/flask_utils/test_list_request.py` — 184 passed, 6 deselected
+- `pipenv run test` — 184 passed, 6 deselected
+- `pipenv run black --check` on the three output test files — unchanged (clean)
+- `pipenv run lint` — fails repo-wide (26 unrelated files would be reformatted; R057 output files clean; pre-existing)
+- `pipenv run build` — succeeded (`api_utils-0.5.0` sdist + wheel)
+
+**Out of scope (deferred)**: R058 version bump.

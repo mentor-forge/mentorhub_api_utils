@@ -20,7 +20,11 @@ from api_utils.mongo_utils.list_query import (
     validate_order,
     validate_pagination,
 )
+from api_utils.services.resource_service import (
+    RESOURCE_LIST_FILTERS as SERVICE_RESOURCE_LIST_FILTERS,
+)
 
+# Local fixture for generic list_query behavior (name/description/status only).
 RESOURCE_LIST_FILTERS = {
     "name": {"type": "contains", "field": "name"},
     "description": {"type": "contains", "field": "description"},
@@ -63,6 +67,100 @@ class TestFilterParsing(unittest.TestCase):
         match = build_match_filter({}, parsed, RESOURCE_LIST_FILTERS)
         self.assertEqual(match["name"]["$regex"], "alpha")
         self.assertEqual(match["status"]["$in"], ["active"])
+
+
+class TestResourceMultiFieldFilters(unittest.TestCase):
+    """Coverage for Resource SERVICE_RESOURCE_LIST_FILTERS (url, interests, etc.)."""
+
+    def test_empty_and_omitted_produce_no_clauses(self):
+        parsed = parse_filter_params({}, SERVICE_RESOURCE_LIST_FILTERS)
+        self.assertEqual(parsed, {})
+        match = build_match_filter({}, parsed, SERVICE_RESOURCE_LIST_FILTERS)
+        self.assertEqual(match, {})
+
+        blank_args = {
+            "url": "",
+            "interests": "",
+            "technologies": "",
+            "skill_level": "",
+            "name": "",
+        }
+        parsed_blank = parse_filter_params(blank_args, SERVICE_RESOURCE_LIST_FILTERS)
+        self.assertEqual(parsed_blank, {})
+        self.assertEqual(
+            build_match_filter({}, parsed_blank, SERVICE_RESOURCE_LIST_FILTERS),
+            {},
+        )
+
+    def test_whitespace_in_list_omitted(self):
+        args = {
+            "interests": "  ,  ",
+            "technologies": "   ",
+            "skill_level": ",",
+        }
+        parsed = parse_filter_params(args, SERVICE_RESOURCE_LIST_FILTERS)
+        self.assertEqual(parsed, {})
+        self.assertNotIn("interests", parsed)
+        self.assertNotIn("technologies", parsed)
+        self.assertNotIn("skill_level", parsed)
+
+    def test_url_contains_match(self):
+        parsed = parse_filter_params(
+            {"url": "example.com"}, SERVICE_RESOURCE_LIST_FILTERS
+        )
+        self.assertEqual(parsed["url"], "example.com")
+        match = build_match_filter({}, parsed, SERVICE_RESOURCE_LIST_FILTERS)
+        self.assertEqual(match["url"]["$regex"], "example.com")
+        self.assertEqual(match["url"]["$options"], "i")
+
+    def test_in_list_match_clauses(self):
+        args = {
+            "interests": "python, data",
+            "technologies": "flask",
+            "skill_level": "beginner,intermediate",
+        }
+        parsed = parse_filter_params(args, SERVICE_RESOURCE_LIST_FILTERS)
+        self.assertEqual(parsed["interests"], ["python", "data"])
+        self.assertEqual(parsed["technologies"], ["flask"])
+        self.assertEqual(parsed["skill_level"], ["beginner", "intermediate"])
+
+        match = build_match_filter({}, parsed, SERVICE_RESOURCE_LIST_FILTERS)
+        self.assertEqual(match["interests"]["$in"], ["python", "data"])
+        self.assertEqual(match["technologies"]["$in"], ["flask"])
+        self.assertEqual(match["skill_level"]["$in"], ["beginner", "intermediate"])
+
+    def test_combined_and_with_existing_filters(self):
+        args = {
+            "name": "alpha",
+            "status": "active",
+            "url": "docs",
+            "interests": "career",
+            "technologies": "react,vue",
+            "skill_level": "advanced",
+        }
+        parsed = parse_filter_params(args, SERVICE_RESOURCE_LIST_FILTERS)
+        match = build_match_filter({}, parsed, SERVICE_RESOURCE_LIST_FILTERS)
+
+        self.assertEqual(match["name"]["$regex"], "alpha")
+        self.assertEqual(match["name"]["$options"], "i")
+        self.assertEqual(match["status"]["$in"], ["active"])
+        self.assertEqual(match["url"]["$regex"], "docs")
+        self.assertEqual(match["url"]["$options"], "i")
+        self.assertEqual(match["interests"]["$in"], ["career"])
+        self.assertEqual(match["technologies"]["$in"], ["react", "vue"])
+        self.assertEqual(match["skill_level"]["$in"], ["advanced"])
+        self.assertNotIn("$or", match)
+        self.assertEqual(
+            set(match.keys()),
+            {
+                "name",
+                "status",
+                "url",
+                "interests",
+                "technologies",
+                "skill_level",
+            },
+        )
 
 
 class TestOrderBy(unittest.TestCase):
