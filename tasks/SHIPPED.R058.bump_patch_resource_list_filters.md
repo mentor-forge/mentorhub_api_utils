@@ -1,6 +1,6 @@
 # R058 – Bump api-utils patch for Resource list filter extension
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R057_test_resource_list_multi_field_filters`  
 **Description**: Bump `api-utils` patch version to `0.5.1` so domain APIs can pin and install the extended `RESOURCE_LIST_FILTERS` from CodeArtifact after merge and `tag-release`.
@@ -64,4 +64,7 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Plan: bump `pyproject.toml` `0.5.0` → `0.5.1`; update README Release pin `api-utils==0.5.1`. No filter/code changes.
+- `pipenv run test`: 184 passed, 6 deselected.
+- `pipenv run lint`: fails repo-wide (26 unrelated files would be reformatted; pre-existing Black/Python target mismatch; same as R056/R057).
+- `pipenv run build`: `api_utils-0.5.1.tar.gz` and `api_utils-0.5.1-py3-none-any.whl`.
