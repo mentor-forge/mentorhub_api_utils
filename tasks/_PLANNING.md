@@ -160,6 +160,23 @@ Tasks to plan (likely serial):
 
 External prerequisite: `mentorhub_api_utils` R048–R054 shipped; `mentorhub_mentee_api` adoption validates the pattern.
 
+### Journey promote + GET detail harvest (R059–R061)
+
+Harvest temporary Journey services from **`mentorhub_mentee_api`** into `api_utils.services.journey_service`. Mutation methods return plain Journey documents; only `get_my_journey_detail` embeds read-time `profile`.
+
+| Task | Source (mentee API) | Upstream outcome |
+|------|---------------------|------------------|
+| `PENDING.R059` | `journey_promote_service.py` | `JourneyService.promote_path_to_next`, `promote_module_to_next` + helpers; port `test_journey_promote_service.py` |
+| `PENDING.R060` | `journey_detail_service.py` | `JourneyService.get_my_journey_detail`; add `"profile"` to `RESTRICTED_UPDATE_FIELDS`; port `test_journey_detail_service.py` |
+| `PENDING.R061` | — | Patch bump `0.5.1` → `0.5.2`; publish via `tag-release` after PR merge |
+
+**Constraints**: Do not change mutation return shapes (`advance` / `complete` / promote stay plain Journey without `profile`).
+
+**Downstream** (paste into target repo planning; blocked on R061 publish):
+
+- **`mentorhub_mentee_api`** — `tasks/ISSUE.mentorhub_mentee_api.adopt_journey_harvest_from_api_utils.md`: bump pin, switch routes to `JourneyService`, delete local promote/detail services and duplicate tests.
+- **`mentorhub_mentor_api`** — `tasks/ISSUE.mentorhub_mentor_api.bump_api_utils_journey_harvest.md`: bump pin only (no promote/detail adoption; local `get_journey_progress` unchanged).
+
 ## MongoDB dictionary schemas
 
 **Definitive** MongoDB collection/dictionary schema information must come from the **running MongoDB configurator service** (`mentorhub_mongodb_api`), not from files in the `mentorhub_mongodb_api` repository.
