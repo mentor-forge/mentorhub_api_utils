@@ -11,8 +11,10 @@
 
 Once `api_utils.services.journey_service.JourneyService` carries promote mutations
 and GET profile enrichment (harvested from this repo's temporary local services),
-the Mentee API should bump its `api-utils` pin, switch routes to the shared
-class, and delete the local wrappers.
+the Mentee API should bump its `api-utils` pin, switch **all Journey routes** to
+the shared class, and **delete the entire `src/services/` folder** — this repo
+has no other local service modules; Journey was the only domain kept local
+temporarily for promote/detail.
 
 ## Scope
 
@@ -53,7 +55,8 @@ class, and delete the local wrappers.
 ## Acceptance
 
 - Routes call `api_utils.services.JourneyService` only for journey domain logic.
-- Confirmation (`rg 'JourneyPromoteService\|JourneyDetailService\|src\.services\.journey'`) that no local journey service imports remain.
+- **`src/services/` is deleted entirely** — no local service module remains.
+- Confirmation (`rg 'JourneyPromoteService\|JourneyDetailService\|src\.services'`) that no local service imports remain in `src/` or `test/`.
 - `pipenv run test`, `pipenv run lint`, `pipenv run build` pass.
 - `pipenv run container`, `pipenv run api`, `pipenv run e2e` pass (promote and GET detail scenarios from L193–L199 / F197–F199).
 
