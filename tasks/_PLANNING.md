@@ -118,47 +118,26 @@ Implementation tasks: `PENDING.R048` → `PENDING.R049` → (`PENDING.R050`–`P
 | `JourneyService` | — (`get_my_journey` single doc) | n/a | n/a | no list method |
 | `AggregationService` | — (per-resource reads) | n/a | n/a | no generic list; R052 adjusts embedded note fetch |
 
-**Not in scope for api_utils**: mentor-local list services (`ProfileService.get_profiles` dashboard, `EncounterService.get_encounters_for_mentee`, `PlanService.get_plans`, etc.) — migrate in `mentorhub_mentor_api` using the same `list_query` utilities after R054 ships.
-
 ## Downstream follow-on issues
 
-Paste the blocks below into the target repo's `tasks/_PLANNING.md` planning session (or promote to `PENDING.*` task files there). **Blocked on** `api-utils>=0.5.0` (R054).
+Paste ISSUE artifacts from `tasks/ISSUE.*.md` into the target repo's planning session (or promote to `PENDING.*` task files there).
 
-### mentorhub_mentee_api
+### Journey promote + GET detail harvest (R059–R061, `api-utils==0.5.2`)
 
-**Issue — Adopt api-utils 0.5.0 Get List pattern (breaking: Path + composite notes)**
+Harvested from **`mentorhub_mentee_api`** only. Mutation methods return plain Journey; `get_my_journey_detail` embeds read-time `profile`.
 
-Short description: Bump `api-utils` to `0.5.0` and align routes/OpenAPI with shared list utilities; fix breaking changes from paginated `PathService.get_paths` and `NoteService.get_notes_for_resource` defaults.
+| Task | Source | Upstream outcome |
+|------|--------|------------------|
+| SHIPPED.R059 | `journey_promote_service.py` | `promote_path_to_next`, `promote_module_to_next` |
+| SHIPPED.R060 | `journey_detail_service.py` | `get_my_journey_detail`; `"profile"` in `RESTRICTED_UPDATE_FIELDS` |
+| SHIPPED.R061 | — | Patch `0.5.2` |
 
-Tasks to plan:
+**Not in R059–R061:** `get_journey_progress` (mentor dashboard aggregation) — still local in `mentorhub_mentor_api`; planned in `ISSUE.mentorhub_api_utils.harvest_mentor_services.md`.
 
-1. **Bump dependency** — `Pipfile` / lockfile → `api-utils==0.5.0`; `pipenv run install`.
-2. **Resource list** — `src/routes/resource_routes.py`: use `parse_list_request` from `api_utils.flask_utils.list_request`; pass `filters` and `sort_by` into `ResourceService.get_resources`; document `name`/`description`/`status` filter query params and `sort_by`/`order` in `docs/openapi.yaml`.
-3. **Path list (breaking)** — `src/routes/path_routes.py`: read `offset`/`size` headers (defaults `0`/`20`); pass through to `PathService.get_paths`. Update `docs/openapi.yaml` and tests (`test/routes`, `test/e2e`) — response is no longer guaranteed full collection without paging.
-4. **Aggregation / resource detail** — verify composites still return full note lists after R052 (api_utils composites use explicit full fetch); add tests if note counts regress.
-5. **Tests** — update service/route mocks for new kwargs; E2E list endpoints assert header pagination and filter query params.
+**Downstream:**
 
-External prerequisite: `mentorhub_api_utils` R048–R054 shipped and published.
-
-### mentorhub_mentor_api
-
-**Issue — Migrate mentor API lists off infinite scroll to Get List pattern**
-
-Short description: Replace all `execute_infinite_scroll_query` usage with `api_utils` Get List utilities; adopt shared harvested services where possible; align OpenAPI and E2E with offset/size headers and plain array responses.
-
-Tasks to plan (likely serial):
-
-1. **Bump dependency** — `api-utils==0.5.0` after R054 publish.
-2. **Resource list** — Delete local infinite-scroll `ResourceService.get_resources`; import `api_utils.services.ResourceService` (or extend for mentor-only CRUD in a thin wrapper). Route: remove `after_id`/`limit` cursor params; add `offset`/`size` headers, filter query params, and standardized `sort_by`/`order` query params per `order_spec`. Mentor CRUD (`create_resource`, `update_resource`) may remain in local wrapper delegating to MongoIO.
-3. **Event list** — Delete local infinite-scroll `EventService.get_events`; use `api_utils.services.EventService.get_events` with `offset`/`size` headers, `type`/`profile_id` filters, and `sort_by`/`order` per `EVENT_LIST_ORDER`. Keep local `get_event` by-id until separately harvested. Update `src/routes/event_routes.py` and `docs/openapi.yaml`.
-4. **Path list** — Align with api_utils `PathService` (pagination + `name` filter); remove duplicate local `path_service.py` list logic if harvesting path CRUD separately.
-5. **Plan list** — `PlanService.get_plans`: add offset/size headers (today returns full sorted list); optional `name` contains.
-6. **Scoped lists** — `EncounterService.get_encounters_for_mentee`: add pagination within `mentee_id` scope; `ProfileService.get_profiles` dashboard: evaluate pagination on mentee cards or document intentional full read.
-7. **Harvest alignment** — Prefer `api_utils.services` for Note/Event/Journey/Path/Resource read paths already harvested; keep mentor-only domains (Mentee, Encounter, Plan, Profile) local.
-8. **OpenAPI sweep** — Remove infinite-scroll response schemas; document header pagination on every GET list operation.
-9. **Tests** — Rewrite `test/e2e/test_resource.py`, `test/e2e/test_event.py`, and service tests expecting `{items, has_more, next_cursor}`.
-
-External prerequisite: `mentorhub_api_utils` R048–R054 shipped; `mentorhub_mentee_api` adoption validates the pattern.
+- **`mentorhub_mentee_api`** — `ISSUE.mentorhub_mentee_api.adopt_journey_harvest_from_api_utils.md`: bump pin, routes → `JourneyService`, **delete entire `src/services/`**.
+- **`mentorhub_mentor_api`** — `ISSUE.mentorhub_mentor_api.bump_api_utils_journey_harvest.md`: **interim bump only**; local `journey_service.py` (progress) stays until `harvest_mentor_services` + `adopt_harvested_services`.
 
 ## MongoDB dictionary schemas
 

@@ -20,6 +20,7 @@ class TestJourneyService(unittest.TestCase):
 
     def setUp(self):
         self.profile_id = "A00000000000000000000099"
+        self.path_id = "B00000000000000000000001"
         self.mock_token = {
             "user_id": "test_user",
             "roles": ["admin"],
@@ -59,10 +60,45 @@ class TestJourneyService(unittest.TestCase):
             ],
             "later": ["C00000000000000000000006"],
         }
+        self.path_document = {
+            "_id": ObjectId(self.path_id),
+            "name": "TestPath",
+            "modules": [
+                {
+                    "name": "ModuleA",
+                    "description": "First module",
+                    "topics": [
+                        {
+                            "name": "Topic1",
+                            "description": "Topic one",
+                            "resources": [ObjectId("507f1f77bcf86cd799439011")],
+                        }
+                    ],
+                },
+                {
+                    "name": "ModuleB",
+                    "description": "Second module",
+                    "topics": [],
+                },
+            ],
+        }
+        self.journey_with_later = {
+            "_id": self.profile_id,
+            "profile_id": self.profile_id,
+            "later": [self.path_id],
+            "next": [],
+        }
+        self.profile_document = {
+            "_id": self.profile_id,
+            "name": "test-user",
+            "full_name": "Test User",
+        }
 
     def _mock_config(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.JOURNEY_COLLECTION_NAME = "Journey"
+        mock_config.PATH_COLLECTION_NAME = "Path"
+        mock_config.PROFILE_COLLECTION_NAME = "Profile"
         mock_config.RESOURCE_COLLECTION_NAME = "Resource"
         mock_config.EVENT_TYPE_ADVANCED = "advanced"
         mock_config.EVENT_TYPE_COMPLETED = "completed"
@@ -306,6 +342,227 @@ class TestJourneyService(unittest.TestCase):
         mock_add_completion.assert_called_once()
         mock_create_event.assert_called_once()
         self.assertEqual(mock_create_event.call_args[0][0]["type"], "completed")
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_get_my_journey_detail_success(
+        self, mock_get_mongo, mock_get_config, mock_get_my_journey
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_my_journey.return_value = {
+            "_id": self.profile_id,
+            "profile_id": self.profile_id,
+            "status": "active",
+        }
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = self.profile_document
+        mock_get_mongo.return_value = mock_mongo
+
+        result = JourneyService.get_my_journey_detail(
+            self.mock_token, self.mock_breadcrumb
+        )
+
+        self.assertEqual(result["_id"], self.profile_id)
+        self.assertEqual(result["profile"], self.profile_document)
+        mock_get_my_journey.assert_called_once_with(
+            self.mock_token, self.mock_breadcrumb
+        )
+        mock_mongo.get_document.assert_called_once_with("Profile", self.profile_id)
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_get_my_journey_detail_missing_profile(
+        self, mock_get_mongo, mock_get_config, mock_get_my_journey
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_my_journey.return_value = {
+            "_id": self.profile_id,
+            "profile_id": self.profile_id,
+            "status": "active",
+        }
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = None
+        mock_get_mongo.return_value = mock_mongo
+
+        with self.assertRaises(HTTPNotFound):
+            JourneyService.get_my_journey_detail(
+                self.mock_token, self.mock_breadcrumb
+            )
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    def test_get_my_journey_detail_missing_profile_id_on_token(
+        self, mock_get_my_journey
+    ):
+        with self.assertRaises(HTTPBadRequest):
+            JourneyService.get_my_journey_detail(
+                {"user_id": "test_user"}, self.mock_breadcrumb
+            )
+        mock_get_my_journey.assert_not_called()
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    def test_get_my_journey_detail_propagates_journey_errors(
+        self, mock_get_my_journey
+    ):
+        mock_get_my_journey.side_effect = HTTPNotFound("Template journey not found")
+
+        with self.assertRaises(HTTPNotFound):
+            JourneyService.get_my_journey_detail(
+                self.mock_token, self.mock_breadcrumb
+            )
+
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_update_journey_rejects_profile_field(
+        self, mock_get_mongo, mock_get_config
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_mongo.return_value = MagicMock()
+
+        with self.assertRaises(HTTPForbidden):
+            JourneyService.update_journey(
+                self.profile_id,
+                {"profile": self.profile_document},
+                self.mentee_token,
+                self.mock_breadcrumb,
+            )
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_promote_path_to_next_success(
+        self, mock_get_mongo, mock_get_config, mock_get_my_journey
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_my_journey.return_value = self.journey_with_later
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = self.path_document
+        mock_mongo.update_document.return_value = {
+            "_id": self.profile_id,
+            "later": [],
+            "next": [
+                {
+                    "name": "ModuleA",
+                    "topics": [{"resources": ["507f1f77bcf86cd799439011"]}],
+                },
+                {"name": "ModuleB", "topics": []},
+            ],
+        }
+        mock_get_mongo.return_value = mock_mongo
+
+        result = JourneyService.promote_path_to_next(
+            self.path_id, self.mock_token, self.mock_breadcrumb
+        )
+
+        self.assertEqual(len(result["next"]), 2)
+        self.assertEqual(result["later"], [])
+        set_data = mock_mongo.update_document.call_args.kwargs["set_data"]
+        self.assertEqual(len(set_data["next"]), 2)
+        self.assertEqual(set_data["later"], [])
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_promote_path_to_next_not_in_later(
+        self, mock_get_mongo, mock_get_config, mock_get_my_journey
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_my_journey.return_value = {**self.journey_with_later, "later": []}
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = self.path_document
+        mock_get_mongo.return_value = mock_mongo
+
+        with self.assertRaises(HTTPNotFound):
+            JourneyService.promote_path_to_next(
+                self.path_id, self.mock_token, self.mock_breadcrumb
+            )
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_promote_path_to_next_no_modules(
+        self, mock_get_mongo, mock_get_config, mock_get_my_journey
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_my_journey.return_value = self.journey_with_later
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = {**self.path_document, "modules": []}
+        mock_get_mongo.return_value = mock_mongo
+
+        with self.assertRaises(HTTPBadRequest):
+            JourneyService.promote_path_to_next(
+                self.path_id, self.mock_token, self.mock_breadcrumb
+            )
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_promote_module_to_next_success(
+        self, mock_get_mongo, mock_get_config, mock_get_my_journey
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_my_journey.return_value = self.journey_with_later
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = self.path_document
+        mock_mongo.update_document.return_value = {
+            "_id": self.profile_id,
+            "later": [self.path_id],
+            "next": [{"name": "ModuleA", "topics": []}],
+        }
+        mock_get_mongo.return_value = mock_mongo
+
+        result = JourneyService.promote_module_to_next(
+            self.path_id, "ModuleA", self.mock_token, self.mock_breadcrumb
+        )
+
+        self.assertEqual(result["next"][0]["name"], "ModuleA")
+        set_data = mock_mongo.update_document.call_args.kwargs["set_data"]
+        self.assertEqual(len(set_data["next"]), 1)
+        self.assertNotIn("later", set_data)
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_promote_module_to_next_duplicate(
+        self, mock_get_mongo, mock_get_config, mock_get_my_journey
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_my_journey.return_value = {
+            **self.journey_with_later,
+            "next": [{"name": "ModuleA", "topics": []}],
+        }
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = self.path_document
+        mock_get_mongo.return_value = mock_mongo
+
+        with self.assertRaises(HTTPBadRequest):
+            JourneyService.promote_module_to_next(
+                self.path_id, "ModuleA", self.mock_token, self.mock_breadcrumb
+            )
+
+    @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_promote_module_to_next_module_not_found(
+        self, mock_get_mongo, mock_get_config, mock_get_my_journey
+    ):
+        self._mock_config(mock_get_config)
+        mock_get_my_journey.return_value = self.journey_with_later
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = self.path_document
+        mock_get_mongo.return_value = mock_mongo
+
+        with self.assertRaises(HTTPNotFound):
+            JourneyService.promote_module_to_next(
+                self.path_id, "MissingModule", self.mock_token, self.mock_breadcrumb
+            )
+
+    def test_promote_path_forbidden_without_profile_id(self):
+        with self.assertRaises(HTTPForbidden):
+            JourneyService.promote_path_to_next(
+                self.path_id, {"user_id": "test_user"}, self.mock_breadcrumb
+            )
 
     @patch("api_utils.services.journey_service.Config.get_instance")
     @patch("api_utils.services.journey_service.MongoIO.get_instance")
