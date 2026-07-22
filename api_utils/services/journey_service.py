@@ -30,6 +30,7 @@ RESTRICTED_UPDATE_FIELDS = [
     "library",
     "now",
     "next",
+    "profile",
 ]
 
 
@@ -124,6 +125,34 @@ class JourneyService:
         except Exception as e:
             logger.error(f"Error retrieving journey for profile {profile_id}: {e}")
             raise HTTPInternalServerError("Failed to retrieve journey")
+
+    @staticmethod
+    def get_my_journey_detail(token, breadcrumb):
+        try:
+            profile_id = token.get("profile_id")
+            if not profile_id:
+                raise HTTPBadRequest("profile_id is required on token")
+
+            journey = JourneyService.get_my_journey(token, breadcrumb)
+
+            mongo = MongoIO.get_instance()
+            config = Config.get_instance()
+            profile = mongo.get_document(config.PROFILE_COLLECTION_NAME, profile_id)
+            if profile is None:
+                raise HTTPNotFound(f"Profile {profile_id} not found")
+
+            logger.info(
+                f"Retrieved journey detail with profile {profile_id} "
+                f"for user {token.get('user_id')}"
+            )
+            return {**journey, "profile": profile}
+        except (HTTPBadRequest, HTTPNotFound):
+            raise
+        except Exception as e:
+            logger.error(
+                f"Error retrieving journey detail for profile {token.get('profile_id')}: {e}"
+            )
+            raise HTTPInternalServerError("Failed to retrieve journey detail")
 
     @staticmethod
     def get_journey(journey_id, token, breadcrumb):
