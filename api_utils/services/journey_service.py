@@ -408,9 +408,7 @@ class JourneyService:
     @staticmethod
     def _path_id_in_later(later_items, path_id):
         target = JourneyService._normalize_id(path_id)
-        return any(
-            JourneyService._normalize_id(item) == target for item in later_items
-        )
+        return any(JourneyService._normalize_id(item) == target for item in later_items)
 
     @staticmethod
     def _module_to_next_module(module):
@@ -549,3 +547,55 @@ class JourneyService:
             raise HTTPInternalServerError(
                 f"Failed to promote module {module_name!r} from path {path_id} to next"
             )
+
+    @staticmethod
+    def get_journey_progress(profile_id, token, breadcrumb):
+        """
+        Count the resources in a mentee's active Learning Journey by scope.
+
+        Returns a dict with ``library``, ``now``, and ``next`` counts.
+        ``library`` and ``now`` count their resource entries directly; ``next``
+        sums the resource entries across all Next topics. Returns zeros when the
+        mentee has no active journey.
+
+        Unlike the generic Journey reads (which are open), the Mentor Dashboard
+        progress aggregation is gated to the ``mentor`` or ``admin`` role, so the
+        role check is performed inline here rather than through the shared
+        ``_check_permission(token, "read")`` (which intentionally allows open
+        reads for the mentee-facing Journey surface).
+
+        Args:
+            profile_id: The mentee Profile id whose journey progress is wanted
+            token: Token dictionary with user_id and roles
+            breadcrumb: Breadcrumb dictionary for audit/logging
+
+        Returns:
+            dict: ``{"library": int, "now": int, "next": int}``
+
+        Raises:
+            HTTPForbidden: If the caller does not hold the ``mentor`` or
+                ``admin`` role
+        """
+        config = Config.get_instance()
+        allowed_roles = {config.ROLE_MENTOR, config.ROLE_ADMIN}
+        roles = token.get("roles", []) or []
+        if not allowed_roles.intersection(roles):
+            raise HTTPForbidden("Mentor or admin role required to access journey data")
+
+        mongo = MongoIO.get_instance()
+        journeys = mongo.get_documents(
+            config.JOURNEY_COLLECTION_NAME,
+            match={"profile_id": profile_id, "status": "active"},
+        )
+        if not journeys:
+            return {"library": 0, "now": 0, "next": 0}
+
+        journey = journeys[0]
+        next_resources = sum(
+            len(topic.get("resources") or []) for topic in (journey.get("next") or [])
+        )
+        return {
+            "library": len(journey.get("library") or []),
+            "now": len(journey.get("now") or []),
+            "next": next_resources,
+        }

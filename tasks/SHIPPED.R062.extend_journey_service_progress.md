@@ -1,6 +1,6 @@
 # R062 – Extend shared JourneyService with get_journey_progress
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `none`  
 **Description**: Add the mentor-dashboard aggregation `get_journey_progress` (active-journey resource counts by scope) to `api_utils.services.journey_service.JourneyService`. This is the one Journey method the Mentor API still keeps locally; harvesting it upstream unblocks `ProfileService` (R065). Port the mentor-API unit tests.
@@ -67,4 +67,9 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Added `JourneyService.get_journey_progress` to `api_utils/services/journey_service.py` (library/now/next scope counts; zero default when no active journey).
+- **Deviation from plan's "reuse `_check_permission`" note:** the upstream `JourneyService._check_permission(token, "read")` intentionally allows **open** reads (mentee-facing surface), whereas the mentor-dashboard progress aggregation requires the `mentor`/`admin` role. Reusing the shared `read` check would have let non-mentor roles through and failed the ported `forbidden_without_mentor_role` test. Resolved by performing the mentor/admin gate **inline** in `get_journey_progress` (documented in the method docstring). No change to existing Journey method semantics.
+- Ported 4 progress unit tests from `../mentorhub_mentor_api/test/services/test_journey_service.py` into a new `TestJourneyProgress` class in `tests/services/test_journey_service.py`, with patch targets rewritten to `api_utils.services.journey_service.*`. Did **not** port the source's `_check_permission` role tests (upstream `_check_permission` has different, open-read semantics with its own coverage).
+- `pipenv run test tests/services/test_journey_service.py`: passed; full suite `pipenv run test`: **200 passed**, 6 deselected.
+- `pipenv run build`: succeeded (`api_utils-0.5.2` sdist + wheel).
+- `black`: the two changed files are formatted clean. Note: `pipenv run lint` (whole-repo `black --check`) also flags ~26 **pre-existing, untouched** files due to a local black version drift (`26.5.1`); those are out of scope for this task and were intentionally left unmodified.
