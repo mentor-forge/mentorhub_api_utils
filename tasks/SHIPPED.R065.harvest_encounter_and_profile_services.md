@@ -1,6 +1,6 @@
 # R065 – Harvest Encounter and Profile services into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R062_extend_journey_service_progress`, `R063_harvest_plan_service`, `R064_harvest_mentee_service`  
 **Description**: Move `EncounterService` and `ProfileService` from `mentorhub_mentor_api/src/services/` into `api_utils.services`, preserving behavior exactly. These two are **mutually dependent composites** (Encounter's owner check calls `ProfileService.get_profile_by_token`; Profile's dashboard/detail call `EncounterService`), so they are harvested together in one task. Port the mentor-API unit tests for both.
@@ -87,4 +87,8 @@ The agent must not update files outside this list. (Package export is handled in
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Harvested `EncounterService` → `api_utils/services/encounter_service.py` and `ProfileService` → `api_utils/services/profile_service.py`, preserving behavior exactly.
+- Import rewrites applied: `encounter_service` top-level `from src.services.plan_service import PlanService` → `api_utils.services.plan_service`; lazy `ProfileService` import → `api_utils.services.profile_service`. `profile_service` lazy imports of `JourneyService`/`EncounterService`/`MenteeService` → `api_utils.services.*` (kept lazy to preserve cycle-breaking).
+- Behavior preserved: Encounter owner-or-admin RBAC (via `ProfileService.get_profile_by_token`), agenda auto-fill from Plan checklist, `_normalize_mentee_id`, optional-pagination `get_encounters_for_mentee`, 404-before-ownership on update; Profile dashboard/detail/properties composites with service-to-service calls.
+- Ported unit tests to `tests/services/test_encounter_service.py` and `tests/services/test_profile_service.py`, patch targets rewritten to `api_utils.services.*` (Encounter owner tests patch `api_utils.services.profile_service.ProfileService.get_profile_by_token`; Profile tests patch collaborators at their home modules).
+- Full suite `pipenv run test`: **275 passed**, 6 deselected. `pipenv run build`: succeeded. All 4 new files `black`-formatted (pre-existing whole-repo lint drift unchanged, out of scope).
