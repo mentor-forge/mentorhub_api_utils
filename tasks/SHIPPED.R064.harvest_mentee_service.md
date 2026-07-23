@@ -1,6 +1,6 @@
 # R064 – Harvest MenteeService into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `none`  
 **Description**: Move `MenteeService` from `mentorhub_mentor_api/src/services/mentee_service.py` into `api_utils.services.mentee_service`, preserving behavior exactly (get-with-create-if-missing, update, mentor/admin RBAC, ObjectId handling). Port the mentor-API unit tests. No cross-service dependencies; can run in parallel with R062/R063.
@@ -62,4 +62,8 @@ The agent must not update files outside this list. (Package export is handled in
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Copied `MenteeService` verbatim into `api_utils/services/mentee_service.py` (source used only `api_utils`/`bson` imports; no `src.services.*` dependencies).
+- Behavior preserved exactly: `RESTRICTED_FIELDS`, mentor/admin `_check_permission`, `_to_object_id` (`HTTPBadRequest`), `_default_document` (schema-valid defaults; optional fields omitted), `get_mentee` (create-if-missing), `update_mentee` (restricted-field guard + `saved` stamp + `HTTPNotFound`).
+- Ported 14 unit tests to `tests/services/test_mentee_service.py` with patch targets rewritten `src.services.mentee_service.*` → `api_utils.services.mentee_service.*`.
+- `pipenv run test tests/services/test_mentee_service.py`: passed; full suite `pipenv run test`: **232 passed**, 6 deselected.
+- `pipenv run build`: succeeded. New files `black`-formatted (pre-existing whole-repo lint drift unchanged, out of scope).
