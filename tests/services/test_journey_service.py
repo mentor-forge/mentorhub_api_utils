@@ -387,9 +387,7 @@ class TestJourneyService(unittest.TestCase):
         mock_get_mongo.return_value = mock_mongo
 
         with self.assertRaises(HTTPNotFound):
-            JourneyService.get_my_journey_detail(
-                self.mock_token, self.mock_breadcrumb
-            )
+            JourneyService.get_my_journey_detail(self.mock_token, self.mock_breadcrumb)
 
     @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
     def test_get_my_journey_detail_missing_profile_id_on_token(
@@ -402,15 +400,11 @@ class TestJourneyService(unittest.TestCase):
         mock_get_my_journey.assert_not_called()
 
     @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
-    def test_get_my_journey_detail_propagates_journey_errors(
-        self, mock_get_my_journey
-    ):
+    def test_get_my_journey_detail_propagates_journey_errors(self, mock_get_my_journey):
         mock_get_my_journey.side_effect = HTTPNotFound("Template journey not found")
 
         with self.assertRaises(HTTPNotFound):
-            JourneyService.get_my_journey_detail(
-                self.mock_token, self.mock_breadcrumb
-            )
+            JourneyService.get_my_journey_detail(self.mock_token, self.mock_breadcrumb)
 
     @patch("api_utils.services.journey_service.Config.get_instance")
     @patch("api_utils.services.journey_service.MongoIO.get_instance")
@@ -576,6 +570,118 @@ class TestJourneyService(unittest.TestCase):
             JourneyService.create_journey(
                 {"status": "active"}, self.mock_token, self.mock_breadcrumb
             )
+
+
+_PROGRESS_MENTEE_ID = ObjectId("507f1f77bcf86cd799439011")
+
+
+def _progress_config():
+    """Minimal Config mock for the mentor-dashboard progress aggregation."""
+    mock_config = MagicMock()
+    mock_config.JOURNEY_COLLECTION_NAME = "Journey"
+    mock_config.ROLE_MENTOR = "mentor"
+    mock_config.ROLE_ADMIN = "admin"
+    return mock_config
+
+
+class TestJourneyProgress(unittest.TestCase):
+    """Harvested from Mentor API: active-journey resource counts by scope."""
+
+    def setUp(self):
+        self.mock_token = {"user_id": "mike", "roles": ["mentor"]}
+        self.mock_breadcrumb = {
+            "at_time": "2024-01-01T00:00:00Z",
+            "by_user": "mike",
+            "from_ip": "127.0.0.1",
+            "correlation_id": "test-correlation-id",
+        }
+
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_get_journey_progress_counts_by_scope(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """Counts library/now directly and sums resources across next topics."""
+        mock_get_config.return_value = _progress_config()
+
+        mock_mongo = MagicMock()
+        mock_mongo.get_documents.return_value = [
+            {
+                "status": "active",
+                "library": [1, 2, 3],
+                "now": [1],
+                "next": [
+                    {"resources": ["a", "b"]},
+                    {"resources": ["c"]},
+                ],
+            }
+        ]
+        mock_get_mongo.return_value = mock_mongo
+
+        result = JourneyService.get_journey_progress(
+            _PROGRESS_MENTEE_ID, self.mock_token, self.mock_breadcrumb
+        )
+
+        self.assertEqual(result, {"library": 3, "now": 1, "next": 3})
+        mock_mongo.get_documents.assert_called_once_with(
+            "Journey", match={"profile_id": _PROGRESS_MENTEE_ID, "status": "active"}
+        )
+
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_get_journey_progress_no_active_journey(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """Return zero counts when the mentee has no active journey."""
+        mock_get_config.return_value = _progress_config()
+
+        mock_mongo = MagicMock()
+        mock_mongo.get_documents.return_value = []
+        mock_get_mongo.return_value = mock_mongo
+
+        result = JourneyService.get_journey_progress(
+            _PROGRESS_MENTEE_ID, self.mock_token, self.mock_breadcrumb
+        )
+
+        self.assertEqual(result, {"library": 0, "now": 0, "next": 0})
+
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_get_journey_progress_handles_missing_scope_fields(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """Missing/None scope fields are treated as empty (zero counts)."""
+        mock_get_config.return_value = _progress_config()
+
+        mock_mongo = MagicMock()
+        mock_mongo.get_documents.return_value = [
+            {"status": "active", "library": None, "next": None}
+        ]
+        mock_get_mongo.return_value = mock_mongo
+
+        result = JourneyService.get_journey_progress(
+            _PROGRESS_MENTEE_ID, self.mock_token, self.mock_breadcrumb
+        )
+
+        self.assertEqual(result, {"library": 0, "now": 0, "next": 0})
+
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_get_journey_progress_forbidden_without_mentor_role(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """Callers lacking the mentor role are denied before any DB access."""
+        mock_get_config.return_value = _progress_config()
+        mock_mongo = MagicMock()
+        mock_get_mongo.return_value = mock_mongo
+
+        non_mentor_token = {"user_id": "carol", "roles": ["coordinator"]}
+        with self.assertRaises(HTTPForbidden):
+            JourneyService.get_journey_progress(
+                _PROGRESS_MENTEE_ID, non_mentor_token, self.mock_breadcrumb
+            )
+
+        mock_mongo.get_documents.assert_not_called()
 
 
 if __name__ == "__main__":
