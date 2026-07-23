@@ -1,6 +1,6 @@
 # R063 – Harvest PlanService into api_utils.services
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `none`  
 **Description**: Move `PlanService` from `mentorhub_mentor_api/src/services/plan_service.py` into `api_utils.services.plan_service`, preserving behavior exactly. Port the mentor-API unit tests. Plan has no cross-service dependencies, so this can run in parallel with R062/R064.
@@ -64,4 +64,8 @@ The agent must not update files outside this list. (Package export is handled in
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Copied `PlanService` verbatim into `api_utils/services/plan_service.py` (source already used `api_utils`/`api_utils.mongo_utils.list_query` imports and had no `src.services.*` dependencies, so no import rewrites in the service itself).
+- Behavior preserved exactly: `PLAN_LIST_FILTERS`/`PLAN_LIST_ORDER`, authenticate-only `_check_permission` placeholder, create (`_id` strip + `created`/`saved` stamp), `get_plans` (shared header pagination + `name` contains), `get_plan` (404), `update_plan` (restricted-field guard + `saved` stamp).
+- Ported 18 unit tests to `tests/services/test_plan_service.py` with patch targets rewritten `src.services.plan_service.*` → `api_utils.services.plan_service.*` (includes checklist passthrough coverage).
+- `pipenv run test tests/services/test_plan_service.py`: passed; full suite `pipenv run test`: **217 passed**, 6 deselected.
+- `pipenv run build`: succeeded. Both new files are `black`-clean (pre-existing whole-repo lint drift unchanged, out of scope).
