@@ -1,6 +1,6 @@
 # R066 – Export harvested services and bump minor version to 0.6.0
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R065_harvest_encounter_and_profile_services`  
 **Description**: Export the four newly harvested services from the `api_utils.services` public API, refresh service docs, and bump `pyproject.toml` from `0.5.2` to `0.6.0` so domain APIs can pin and install the full shared service surface from CodeArtifact after merge and `tag-release`. This is the release task for the Mentor-API harvest feature.
@@ -56,4 +56,8 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Exported `EncounterService`, `MenteeService`, `PlanService`, `ProfileService` from `api_utils/services/__init__.py` (imports + `__all__`, alongside existing services). Verified `api_utils.services.<Service>` resolves for all four.
+- Bumped `pyproject.toml` `version` `0.5.2` → `0.6.0` (minor: additive services + one additive `JourneyService` method; backward compatible).
+- `README.md`: updated the `api-utils==` pin example to `0.6.0`, expanded the `services/` description, and listed the full shared surface.
+- `pipenv run test`: **275 passed**, 6 deselected. `pipenv run build`: `api_utils-0.6.0` sdist + wheel. Changed files `black`-clean.
+- Publication to CodeArtifact is out of scope for this task — performed after PR merge via `pipenv run tag-release`.

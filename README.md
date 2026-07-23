@@ -50,7 +50,7 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.5.2`). Releasing is two steps:
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.6.0`). Releasing is two steps:
 - Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
 - After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
 
@@ -62,7 +62,7 @@ Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.5.2`). Releasing 
   - `config/` - Configuration singleton with support for file, environment, and default values
   - `flask_utils/` - Flask-specific utilities (JSON encoder, token, breadcrumb)
   - `mongo_utils/` - MongoDB utilities (MongoIO singleton, document encoding, list query, legacy infinite scroll)
-  - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation)
+  - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation, Plan, Mentee, Encounter, Profile)
   - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer)
 
 - `tests/` - Test suite for all components
@@ -76,6 +76,10 @@ from api_utils.services import JourneyService, PathService
 # or
 from api_utils import JourneyService, PathService
 ```
+
+The full shared surface is: `AggregationService`, `EncounterService`,
+`EventService`, `JourneyService`, `MenteeService`, `NoteService`, `PathService`,
+`PlanService`, `ProfileService`, and `ResourceService`.
 
 ### Standardized Get List pattern
 
