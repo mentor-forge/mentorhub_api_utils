@@ -1,6 +1,6 @@
 # R067 – Align Journey nested id types to the schema (drop the `_normalize_id` bridge)
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Defect  
 **Depends On**: `none`  
 **Description**: `JourneyService` stores several nested reference fields as **strings** even though the live Journey schema declares every id field as a 24-hex `ObjectId` identifier. This forces a defensive `_normalize_id` string-coercion bridge and mixed BSON/string typing (the smell Mike flagged in the R062–R066 review). Additionally, `advance_resource` writes the resource **name** into `now[].resource_id` (`resource.get("name", ...)`) and `_find_now_entry` matches by name — both diverge from the schema, which requires an id there. Align the stored types to the schema by encoding id fields to `ObjectId` at the `MongoIO` write boundary via `encode_document`, switch `now[].resource_id` to the id, then remove `_normalize_id` and compare ids consistently. Split out from PR #23 because it changes **stored data shape** and the mentee advance/complete flow semantics (and may need a data migration); kept separate so the harvest release (`0.6.0`) stays low-risk.
@@ -93,4 +93,31 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+- Folded into PR #23 (the R062–R066 harvest release) rather than a separate PR, to
+  minimize version churn on this shared asset — per the maintainer's direction.
+- Confirmed the definitive schema live from the running configurator
+  (`curl http://localhost:8383/api/configurations/json_schema/Journey.yaml/latest/`):
+  **every** id field, including `now[].resource_id`, is a 24-hex identifier
+  (`^[0-9a-fA-F]{24}$`). The checked-in `mentorhub_mongodb_api` dictionary YAML was
+  stale (that checkout was 8 commits behind `origin/main`) and wrongly said `word`.
+- `api_utils/services/journey_service.py`:
+  - Replaced `_normalize_id` (→ string) with `_oid` (→ canonical `ObjectId`) used
+    only for in-memory equality; `ObjectId(...)` accepts both str and ObjectId.
+  - `advance_resource` now stores the resource **id** in `now[].resource_id`
+    (was the resource *name*); `_find_now_entry` matches by id only.
+  - `_module_to_next_module` copies resource ids through unchanged (no more
+    stringify).
+  - All `update_document` writes build `set_data` then `encode_document(...)` the id
+    fields at the `MongoIO` boundary (`resources`, `resource_id`, `later`); encode is
+    idempotent for values already `ObjectId`. Dates left as-is (out of scope).
+  - `journey_id` for the `document_id` arg / event token / logs is `str(journey["_id"])`.
+- `tests/services/test_journey_service.py`: updated the `complete` `now` mock to an
+  `ObjectId` resource_id (schema shape); added type assertions that advanced
+  `now[].resource_id`, completed `library[].resource_id`, and promoted
+  `next[].topics[].resources` persist as `ObjectId`.
+- **Data note:** the lookup in `complete_resource` is now id-based. The maintainer
+  confirmed the `journey.now` test/seed data is already migrated to ids. Any pre-existing
+  production `now[].resource_id` still holding a name would fail the completion lookup
+  and must be migrated separately.
+- `pipenv run test`: **277 passed**, 6 deselected. Changed files `black`-clean.
+  `pipenv run build`: `api_utils-0.6.0`.

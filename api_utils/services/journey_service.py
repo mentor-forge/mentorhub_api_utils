@@ -66,21 +66,16 @@ class JourneyService:
             raise HTTPBadRequest(f"{field_name} must be a valid MongoDB ObjectId")
 
     @staticmethod
-    def _normalize_id(value):
-        """Return the canonical string form of an id for comparison.
+    def _oid(value):
+        """Coerce an id to its canonical BSON ``ObjectId`` form.
 
-        Journey references can currently be either a BSON ``ObjectId`` or a
-        string depending on the write path (e.g. ``next``/``library`` resource
-        ids, ``later`` path ids), while inbound ids from routes arrive as
-        strings. Normalizing both operands to ``str`` gives a type-agnostic
-        equality check.
-
-        NOTE: this is a bridge over mixed id typing. Per the Journey dictionary
-        those nested refs are ``identifier`` (ObjectId), so the intended
-        end-state is to store them as ObjectId and drop this helper. See
-        follow-on task ``R067`` (align Journey nested id types to schema).
+        Inbound ids arrive as strings while stored ids are ``ObjectId``;
+        ``ObjectId(...)`` accepts both, so this yields a single canonical type
+        for in-memory equality checks. Persistence is handled separately by
+        ``encode_document`` at the ``MongoIO`` boundary, so services never write
+        the string form back into a document.
         """
-        return str(value)
+        return ObjectId(value)
 
     @staticmethod
     def _validate_update_data(data):
@@ -237,26 +232,24 @@ class JourneyService:
 
     @staticmethod
     def _resource_id_in_next(next_modules, resource_id):
-        target = JourneyService._normalize_id(resource_id)
+        target = JourneyService._oid(resource_id)
         for module in next_modules:
             for topic in module.get("topics", []):
                 for rid in topic.get("resources", []):
-                    if JourneyService._normalize_id(rid) == target:
+                    if JourneyService._oid(rid) == target:
                         return True
         return False
 
     @staticmethod
     def _remove_resource_from_next(next_modules, resource_id):
-        target = JourneyService._normalize_id(resource_id)
+        target = JourneyService._oid(resource_id)
         found = False
         new_modules = []
         for module in next_modules:
             new_topics = []
             for topic in module.get("topics", []):
                 resources = topic.get("resources", [])
-                kept = [
-                    r for r in resources if JourneyService._normalize_id(r) != target
-                ]
+                kept = [r for r in resources if JourneyService._oid(r) != target]
                 if len(kept) != len(resources):
                     found = True
                 if kept:
@@ -271,11 +264,12 @@ class JourneyService:
 
     @staticmethod
     def _find_now_entry(now_items, resource):
-        resource_oid = JourneyService._normalize_id(resource["_id"])
-        resource_name = resource.get("name")
+        # now[].resource_id is a Resource id (ObjectId) per the Journey schema;
+        # match on the id, not the resource name.
+        resource_oid = JourneyService._oid(resource["_id"])
         for index, item in enumerate(now_items):
-            item_rid = JourneyService._normalize_id(item.get("resource_id", ""))
-            if item_rid == resource_oid or item.get("resource_id") == resource_name:
+            rid = item.get("resource_id")
+            if rid is not None and JourneyService._oid(rid) == resource_oid:
                 return index, item
         return None, None
 
@@ -299,7 +293,7 @@ class JourneyService:
                 raise HTTPNotFound(f"Resource {resource_id} not found")
 
             journey = JourneyService.get_my_journey(token, breadcrumb)
-            journey_id = JourneyService._normalize_id(journey["_id"])
+            journey_id = str(journey["_id"])
             next_modules = journey.get("next", [])
 
             if not JourneyService._resource_id_in_next(next_modules, resource_id):
@@ -316,21 +310,26 @@ class JourneyService:
                 )
 
             now_item = {
-                "resource_id": resource.get("name", resource_id),
+                "resource_id": resource_id,
                 "added": breadcrumb["at_time"],
                 "used": 0,
             }
             now_items = copy.deepcopy(journey.get("now", []))
             now_items.append(now_item)
 
+            set_data = {
+                "next": updated_next,
+                "now": now_items,
+                "saved": breadcrumb,
+            }
+            # Encode id fields to ObjectId at the MongoIO boundary (idempotent
+            # for values already ObjectId). next[].topics[].resources and
+            # now[].resource_id are identifiers per the Journey schema.
+            encode_document(set_data, ["resources", "resource_id"], [])
             updated = mongo.update_document(
                 config.JOURNEY_COLLECTION_NAME,
                 document_id=journey_id,
-                set_data={
-                    "next": updated_next,
-                    "now": now_items,
-                    "saved": breadcrumb,
-                },
+                set_data=set_data,
             )
 
             from api_utils.services.event_service import EventService
@@ -363,7 +362,7 @@ class JourneyService:
                 raise HTTPNotFound(f"Resource {resource_id} not found")
 
             journey = JourneyService.get_my_journey(token, breadcrumb)
-            journey_id = JourneyService._normalize_id(journey["_id"])
+            journey_id = str(journey["_id"])
             now_items = copy.deepcopy(journey.get("now", []))
 
             index, now_entry = JourneyService._find_now_entry(now_items, resource)
@@ -386,14 +385,18 @@ class JourneyService:
             library_items = copy.deepcopy(journey.get("library", []))
             library_items.append(library_item)
 
+            set_data = {
+                "now": now_items,
+                "library": library_items,
+                "saved": breadcrumb,
+            }
+            # now[].resource_id and library[].resource_id are identifiers per the
+            # Journey schema; encode at the MongoIO boundary.
+            encode_document(set_data, ["resource_id"], [])
             updated = mongo.update_document(
                 config.JOURNEY_COLLECTION_NAME,
                 document_id=journey_id,
-                set_data={
-                    "now": now_items,
-                    "library": library_items,
-                    "saved": breadcrumb,
-                },
+                set_data=set_data,
             )
 
             from api_utils.services.aggregation_service import AggregationService
@@ -423,8 +426,8 @@ class JourneyService:
 
     @staticmethod
     def _path_id_in_later(later_items, path_id):
-        target = JourneyService._normalize_id(path_id)
-        return any(JourneyService._normalize_id(item) == target for item in later_items)
+        target = JourneyService._oid(path_id)
+        return any(JourneyService._oid(item) == target for item in later_items)
 
     @staticmethod
     def _module_to_next_module(module):
@@ -434,15 +437,14 @@ class JourneyService:
             "topics": [],
         }
         for topic in module.get("topics", []):
-            resources = [
-                JourneyService._normalize_id(resource_id)
-                for resource_id in topic.get("resources", [])
-            ]
+            # Copy resource identifiers through unchanged (they are ObjectId on
+            # the source Path); the write boundary encodes them via
+            # encode_document. Do not stringify.
             next_module["topics"].append(
                 {
                     "name": topic.get("name"),
                     "description": topic.get("description"),
-                    "resources": resources,
+                    "resources": list(topic.get("resources", [])),
                 }
             )
         return next_module
@@ -463,7 +465,7 @@ class JourneyService:
             raise HTTPNotFound(f"Path {path_id} not found")
 
         journey = JourneyService.get_my_journey(token, breadcrumb)
-        journey_id = JourneyService._normalize_id(journey["_id"])
+        journey_id = str(journey["_id"])
         later_items = journey.get("later", [])
 
         if not JourneyService._path_id_in_later(later_items, path_id):
@@ -486,21 +488,25 @@ class JourneyService:
             for module in path_modules:
                 next_modules.append(JourneyService._module_to_next_module(module))
 
-            normalized_path_id = JourneyService._normalize_id(path_id)
+            target_path_oid = JourneyService._oid(path_id)
             updated_later = [
                 item
                 for item in later_items
-                if JourneyService._normalize_id(item) != normalized_path_id
+                if JourneyService._oid(item) != target_path_oid
             ]
 
+            set_data = {
+                "next": next_modules,
+                "later": updated_later,
+                "saved": breadcrumb,
+            }
+            # next[].topics[].resources and later[] are identifiers per the
+            # Journey schema; encode at the MongoIO boundary.
+            encode_document(set_data, ["resources", "later"], [])
             updated = mongo.update_document(
                 config.JOURNEY_COLLECTION_NAME,
                 document_id=journey_id,
-                set_data={
-                    "next": next_modules,
-                    "later": updated_later,
-                    "saved": breadcrumb,
-                },
+                set_data=set_data,
             )
 
             logger.info(f"Promoted path {path_id} to next for journey {journey_id}")
@@ -540,13 +546,16 @@ class JourneyService:
 
             next_modules.append(JourneyService._module_to_next_module(path_module))
 
+            set_data = {
+                "next": next_modules,
+                "saved": breadcrumb,
+            }
+            # next[].topics[].resources are identifiers per the Journey schema.
+            encode_document(set_data, ["resources"], [])
             updated = mongo.update_document(
                 config.JOURNEY_COLLECTION_NAME,
                 document_id=journey_id,
-                set_data={
-                    "next": next_modules,
-                    "saved": breadcrumb,
-                },
+                set_data=set_data,
             )
 
             logger.info(
