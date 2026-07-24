@@ -11,6 +11,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 
 from api_utils import MongoIO, Config
+from api_utils.mongo_utils import encode_document
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
     HTTPForbidden,
@@ -583,9 +584,16 @@ class JourneyService:
             raise HTTPForbidden("Mentor or admin role required to access journey data")
 
         mongo = MongoIO.get_instance()
+        # Journey.profile_id is stored as a BSON ObjectId (see _clone_template),
+        # so encode the match id before querying. MongoIO.get_documents does not
+        # coerce match values (unlike get_document/update_document), so a raw
+        # string profile_id would silently match nothing. A value that is
+        # already an ObjectId is left unchanged by encode_document.
+        match = {"profile_id": profile_id, "status": "active"}
+        encode_document(match, ["profile_id"], [])
         journeys = mongo.get_documents(
             config.JOURNEY_COLLECTION_NAME,
-            match={"profile_id": profile_id, "status": "active"},
+            match=match,
         )
         if not journeys:
             return {"library": 0, "now": 0, "next": 0}

@@ -683,6 +683,33 @@ class TestJourneyProgress(unittest.TestCase):
 
         mock_mongo.get_documents.assert_not_called()
 
+    @patch("api_utils.services.journey_service.Config.get_instance")
+    @patch("api_utils.services.journey_service.MongoIO.get_instance")
+    def test_get_journey_progress_encodes_string_profile_id(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """A string profile_id is encoded to ObjectId before matching.
+
+        Journey.profile_id is stored as a BSON ObjectId, and
+        MongoIO.get_documents does not coerce match values, so the service must
+        encode the id itself; otherwise a string profile_id silently matches
+        nothing.
+        """
+        mock_get_config.return_value = _progress_config()
+
+        mock_mongo = MagicMock()
+        mock_mongo.get_documents.return_value = []
+        mock_get_mongo.return_value = mock_mongo
+
+        JourneyService.get_journey_progress(
+            str(_PROGRESS_MENTEE_ID), self.mock_token, self.mock_breadcrumb
+        )
+
+        # The string id must have been encoded to the equivalent ObjectId.
+        mock_mongo.get_documents.assert_called_once_with(
+            "Journey", match={"profile_id": _PROGRESS_MENTEE_ID, "status": "active"}
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

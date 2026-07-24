@@ -440,6 +440,50 @@ class TestProfileService(unittest.TestCase):
                 "999", self.mock_token, self.mock_breadcrumb
             )
 
+    @patch(
+        "api_utils.services.encounter_service.EncounterService.get_encounters_for_mentee"
+    )
+    @patch("api_utils.services.journey_service.JourneyService.get_journey_progress")
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    @patch("api_utils.services.profile_service.MongoIO.get_instance")
+    def test_get_profile_properties_encodes_string_profile_id(
+        self,
+        mock_get_mongo,
+        mock_get_config,
+        mock_get_journey_progress,
+        mock_get_encounters_for_mentee,
+    ):
+        """The active-Journey lookup encodes the string profile_id to ObjectId.
+
+        Journey.profile_id is a BSON ObjectId and MongoIO.get_documents does not
+        coerce match values, so a raw string profile_id would silently return no
+        journey. This asserts the match id is encoded.
+        """
+        mock_get_config.return_value = _make_config()
+
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = {
+            "_id": MENTEE_1_ID,
+            "name": "daniel",
+            "status": "active",
+        }
+        # No active journey; we only care about how the match was built.
+        mock_mongo.get_documents.return_value = []
+        mock_get_mongo.return_value = mock_mongo
+
+        mock_get_journey_progress.return_value = {"library": 0, "now": 0, "next": 0}
+        mock_get_encounters_for_mentee.return_value = []
+
+        ProfileService.get_profile_properties(
+            str(MENTEE_1_ID), self.mock_token, self.mock_breadcrumb
+        )
+
+        # The single get_documents call (the active-Journey lookup) must match on
+        # the encoded ObjectId, not the raw string.
+        mock_mongo.get_documents.assert_called_once_with(
+            "Journey", match={"profile_id": MENTEE_1_ID, "status": "active"}
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

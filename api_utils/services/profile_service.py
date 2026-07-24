@@ -14,6 +14,7 @@ responses.
 """
 
 from api_utils import MongoIO, Config
+from api_utils.mongo_utils import encode_document
 from api_utils.flask_utils.exceptions import HTTPForbidden, HTTPNotFound
 from pymongo import ASCENDING
 import logging
@@ -292,9 +293,15 @@ class ProfileService:
         from api_utils.services.journey_service import JourneyService
         from api_utils.services.encounter_service import EncounterService
 
+        # Journey.profile_id is stored as a BSON ObjectId; encode the match id so
+        # a string profile_id (route path param) matches the stored ObjectId.
+        # MongoIO.get_documents does not coerce match values, so an unencoded
+        # string would silently return no journey here.
+        journey_match = {"profile_id": profile_id, "status": "active"}
+        encode_document(journey_match, ["profile_id"], [])
         journeys = mongo.get_documents(
             config.JOURNEY_COLLECTION_NAME,
-            match={"profile_id": profile_id, "status": "active"},
+            match=journey_match,
         )
         journey = journeys[0] if journeys else None
         progress = JourneyService.get_journey_progress(profile_id, token, breadcrumb)
