@@ -2,6 +2,14 @@
 
 This repo builds and publishes the **`api_utils`** PyPI package (`pip install api-utils`) used across the [Mentor Hub](https://github.com/mentor-forge/mentorhub) system. Packages are published to **AWS CodeArtifact** in the Shared-Services account.
 
+## Current State
+
+Mentor Hub is **pre-MVP**. There is **no production environment yet**. Nothing here
+is running in production, so there is no live user data to migrate and breaking
+changes carry no production risk until MVP. Collection schemas are likewise
+unversioned for release purposes — every collection is at `0.1.0.0` and will not be
+formally versioned until we cut MVP.
+
 ## Prerequisites
 - Mentor Hub [Developers Edition](https://github.com/mentor-forge/mentorhub/blob/main/CONTRIBUTING.md)
 - Developer [SPA Standard Prerequisites](https://github.com/mentor-forge/mentorhub/blob/main/DeveloperEdition/standards/spa_standards.md)

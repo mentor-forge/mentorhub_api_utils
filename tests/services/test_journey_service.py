@@ -3,6 +3,7 @@ Unit tests for Journey service.
 """
 
 import unittest
+from datetime import datetime
 from unittest.mock import patch, MagicMock
 from bson import ObjectId
 
@@ -271,9 +272,10 @@ class TestJourneyService(unittest.TestCase):
         mock_create_event.assert_called_once()
         self.assertEqual(mock_create_event.call_args[0][0]["type"], "advanced")
         # The advanced resource is persisted to now[].resource_id as an ObjectId
-        # (the resource id, not its name).
+        # (the resource id, not its name), and the date field as a datetime.
         set_data = mock_mongo.update_document.call_args.kwargs["set_data"]
         self.assertEqual(set_data["now"][-1]["resource_id"], ObjectId(resource_id))
+        self.assertIsInstance(set_data["now"][-1]["added"], datetime)
 
     @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
     @patch("api_utils.services.journey_service.Config.get_instance")
@@ -347,9 +349,12 @@ class TestJourneyService(unittest.TestCase):
         mock_add_completion.assert_called_once()
         mock_create_event.assert_called_once()
         self.assertEqual(mock_create_event.call_args[0][0]["type"], "completed")
-        # The completed resource is persisted to library as an ObjectId.
+        # The completed resource is persisted to library as an ObjectId, with
+        # started/completed as datetimes.
         set_data = mock_mongo.update_document.call_args.kwargs["set_data"]
         self.assertEqual(set_data["library"][-1]["resource_id"], ObjectId(resource_id))
+        self.assertIsInstance(set_data["library"][-1]["started"], datetime)
+        self.assertIsInstance(set_data["library"][-1]["completed"], datetime)
 
     @patch("api_utils.services.journey_service.JourneyService.get_my_journey")
     @patch("api_utils.services.journey_service.Config.get_instance")

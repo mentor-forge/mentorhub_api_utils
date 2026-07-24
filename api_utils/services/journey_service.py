@@ -322,10 +322,13 @@ class JourneyService:
                 "now": now_items,
                 "saved": breadcrumb,
             }
-            # Encode id fields to ObjectId at the MongoIO boundary (idempotent
-            # for values already ObjectId). next[].topics[].resources and
-            # now[].resource_id are identifiers per the Journey schema.
-            encode_document(set_data, ["resources", "resource_id"], [])
+            # Encode ids and dates at the MongoIO boundary (idempotent for
+            # values already ObjectId/datetime). Per the Journey BSON schema
+            # next[].topics[].resources and now[].resource_id are objectId, and
+            # now[].added / now[].started are date.
+            encode_document(
+                set_data, ["resources", "resource_id"], ["added", "started"]
+            )
             updated = mongo.update_document(
                 config.JOURNEY_COLLECTION_NAME,
                 document_id=journey_id,
@@ -390,9 +393,12 @@ class JourneyService:
                 "library": library_items,
                 "saved": breadcrumb,
             }
-            # now[].resource_id and library[].resource_id are identifiers per the
-            # Journey schema; encode at the MongoIO boundary.
-            encode_document(set_data, ["resource_id"], [])
+            # Encode ids and dates at the MongoIO boundary. Per the Journey BSON
+            # schema now[]/library[].resource_id are objectId, and
+            # now[].added / library[].started / library[].completed are date.
+            encode_document(
+                set_data, ["resource_id"], ["added", "started", "completed"]
+            )
             updated = mongo.update_document(
                 config.JOURNEY_COLLECTION_NAME,
                 document_id=journey_id,

@@ -107,17 +107,20 @@ The agent must not update files outside this list.
     (was the resource *name*); `_find_now_entry` matches by id only.
   - `_module_to_next_module` copies resource ids through unchanged (no more
     stringify).
-  - All `update_document` writes build `set_data` then `encode_document(...)` the id
-    fields at the `MongoIO` boundary (`resources`, `resource_id`, `later`); encode is
-    idempotent for values already `ObjectId`. Dates left as-is (out of scope).
+  - All `update_document` writes build `set_data` then `encode_document(...)` at the
+    `MongoIO` boundary. Confirmed against the live **BSON** schema
+    (`.../bson_schema/Journey.yaml/0.1.0.0/`): id fields (`resources`, `resource_id`,
+    `later`) are `objectId` and date fields (`now[].added`/`started`,
+    `library[].started`/`completed`) are `date` — so both ids and those dates are now
+    encoded. Encode is idempotent for values already `ObjectId`/`datetime`. Breadcrumb
+    `created`/`saved` are left to the platform's breadcrumb handling (out of scope).
   - `journey_id` for the `document_id` arg / event token / logs is `str(journey["_id"])`.
 - `tests/services/test_journey_service.py`: updated the `complete` `now` mock to an
   `ObjectId` resource_id (schema shape); added type assertions that advanced
   `now[].resource_id`, completed `library[].resource_id`, and promoted
   `next[].topics[].resources` persist as `ObjectId`.
-- **Data note:** the lookup in `complete_resource` is now id-based. The maintainer
-  confirmed the `journey.now` test/seed data is already migrated to ids. Any pre-existing
-  production `now[].resource_id` still holding a name would fail the completion lookup
-  and must be migrated separately.
+- **Data note:** the lookup in `complete_resource` is now id-based. The `journey.now`
+  test/seed data is already migrated to ids. Mentor Hub is **pre-MVP with no production
+  environment**, so there is no live data to migrate and no production risk.
 - `pipenv run test`: **277 passed**, 6 deselected. Changed files `black`-clean.
   `pipenv run build`: `api_utils-0.6.0`.
