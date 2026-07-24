@@ -54,8 +54,9 @@ Each task file must contain the following sections under H1 and H2 headings.
   - Should always include a description of the tests that should be used to verify completion.
   - In this repo, that typically means some combination of:
     - `pipenv install --dev` — refresh dependencies after `Pipfile` / lockfile changes (CodeArtifact auth; run `mh` first if needed)
-    - `pipenv run db` start the backing database (required for all testing)
-    = `pipenv run test` — unit tests (pytest, excludes `@pytest.mark.e2e`)
+    - `pipenv run db` start the backing database (required for integration and e2e testing)
+    - `pipenv run test` — pure unit tests (pytest, `-m "not e2e and not integration"`; no backing services)
+    - `pipenv run integration` — integration tests against the backing DB (`-m integration`; services + MongoIO); use this (not service-level type assertions) to cover DB-schema type safety
     - `pipenv run dev` — run API dev server locally (for manual or E2E verification)
     - `pipenv run e2e` — end-to-end tests against a running dev server
   - Should always include the **Packaging verification** step:

@@ -27,11 +27,14 @@ pipenv install
 ## Install dependencies
 pipenv install --dev
 
-# start backing db container (required for MongoIO unit/integration tests)
+# start backing db container (required for integration and e2e tests)
 pipenv run db
 
-## run unit tests (includes MongoIO Integration Tests)
+## run unit tests (pure/mocked, no backing services)
 pipenv run test
+
+## run integration tests (exercise services + MongoIO against the DB; run `pipenv run db` first)
+pipenv run integration
 
 ## run demo dev server - captures command line, serves API at localhost:9092
 ## Note: dev uses a fixed JWT_SECRET for local E2E; see tests/e2e_auth.py
