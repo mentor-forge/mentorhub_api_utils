@@ -67,8 +67,19 @@ class JourneyService:
 
     @staticmethod
     def _normalize_id(value):
-        if isinstance(value, ObjectId):
-            return str(value)
+        """Return the canonical string form of an id for comparison.
+
+        Journey references can currently be either a BSON ``ObjectId`` or a
+        string depending on the write path (e.g. ``next``/``library`` resource
+        ids, ``later`` path ids), while inbound ids from routes arrive as
+        strings. Normalizing both operands to ``str`` gives a type-agnostic
+        equality check.
+
+        NOTE: this is a bridge over mixed id typing. Per the Journey dictionary
+        those nested refs are ``identifier`` (ObjectId), so the intended
+        end-state is to store them as ObjectId and drop this helper. See
+        follow-on task ``R067`` (align Journey nested id types to schema).
+        """
         return str(value)
 
     @staticmethod
@@ -88,8 +99,8 @@ class JourneyService:
             raise HTTPNotFound(f"Template journey {TEMPLATE_JOURNEY_ID} not found")
 
         document = {
-            "_id": ObjectId(profile_id),
-            "profile_id": ObjectId(profile_id),
+            "_id": profile_id,
+            "profile_id": profile_id,
             "status": template.get("status", "active"),
             "library": copy.deepcopy(template.get("library", [])),
             "now": copy.deepcopy(template.get("now", [])),
@@ -98,6 +109,10 @@ class JourneyService:
             "created": breadcrumb,
             "saved": breadcrumb,
         }
+        # Inbound ids travel as strings; encode the identifier fields to BSON
+        # ObjectId at the last moment before the write, via the shared utility
+        # (rather than hand-rolling ObjectId(...)).
+        encode_document(document, ["_id", "profile_id"], [])
         mongo.create_document(config.JOURNEY_COLLECTION_NAME, document)
         created = mongo.get_document(config.JOURNEY_COLLECTION_NAME, profile_id)
         logger.info(f"Created journey {profile_id} from template for user {profile_id}")
