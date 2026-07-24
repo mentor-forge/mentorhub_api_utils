@@ -3,7 +3,7 @@
 **Status**: Pending  
 **Type**: Defect  
 **Depends On**: `none`  
-**Description**: `JourneyService` stores several nested reference fields as **strings** even though the Journey dictionary declares them as `identifier` (BSON `ObjectId`). This forces a defensive `_normalize_id` string-coercion bridge and mixed BSON/string typing (the smell Mike flagged in the R062–R066 review). Align the stored types to the schema by encoding id fields to `ObjectId` at the `MongoIO` write boundary via `encode_document`, then remove `_normalize_id` and compare ids consistently. Split out from PR #23 because it changes **stored data shape** and requires care around a `resource_id` key-name collision; kept separate so the harvest release (`0.6.0`) stays low-risk.
+**Description**: `JourneyService` stores several nested reference fields as **strings** even though the live Journey schema declares every id field as a 24-hex `ObjectId` identifier. This forces a defensive `_normalize_id` string-coercion bridge and mixed BSON/string typing (the smell Mike flagged in the R062–R066 review). Additionally, `advance_resource` writes the resource **name** into `now[].resource_id` (`resource.get("name", ...)`) and `_find_now_entry` matches by name — both diverge from the schema, which requires an id there. Align the stored types to the schema by encoding id fields to `ObjectId` at the `MongoIO` write boundary via `encode_document`, switch `now[].resource_id` to the id, then remove `_normalize_id` and compare ids consistently. Split out from PR #23 because it changes **stored data shape** and the mentee advance/complete flow semantics (and may need a data migration); kept separate so the harvest release (`0.6.0`) stays low-risk.
 
 ## Path anchoring
 
@@ -22,51 +22,63 @@ Always read these files before implementation:
 - `api_utils/mongo_utils/mongo_io.py` — note `get_documents(match=...)` does **not** coerce match values
 - `tests/services/test_journey_service.py`
 
-### Authoritative schema (fetch live before implementing)
+### Authoritative schema — fetched live (do NOT trust repo YAML)
 
-Per `_PLANNING.md`, the definitive schema comes from the running configurator, not the repo YAML. With the DB up (`pipenv run db`):
+Per `_PLANNING.md`, the definitive schema comes from the **running configurator**,
+not the repo YAML. This was confirmed on 2026-07-24 with the DB up
+(`pipenv run db`):
 
 ```bash
-curl -X GET "http://localhost:8383/api/configurations/json_schema/Journey.yaml/latest/" -H "accept: application/json"
+curl -s "http://localhost:8383/api/configurations/json_schema/Journey.yaml/latest/" -H "accept: application/json"
 ```
 
-At planning time the `Journey.0.1.0.yaml` dictionary declares:
+The live schema reports **every** id field as a 24-hex identifier
+(`"pattern":"^[0-9a-fA-F]{24}$","type":"string"` on the wire = BSON `ObjectId`):
 
-| Field | Dictionary type | Intended BSON |
-|-------|-----------------|---------------|
-| `_id`, `profile_id` | `identifier` | `ObjectId` |
-| `library[].resource_id` | `identifier` | `ObjectId` |
+| Field | Live schema | BSON |
+|-------|-------------|------|
+| `_id`, `profile_id` | 24-hex identifier | `ObjectId` |
+| `library[].resource_id` | 24-hex identifier | `ObjectId` |
 | `library[].started`, `library[].completed` | `date-time` | `datetime` |
-| `next[].topics[].resources[]` | `identifier` | `ObjectId` |
-| `later[]` | `identifier` | `ObjectId` |
-| **`now[].resource_id`** | **`word`** | **string (the resource *name*, not an id)** |
+| `next[].topics[].resources[]` | 24-hex identifier | `ObjectId` |
+| `later[]` | 24-hex identifier | `ObjectId` |
+| `now[].resource_id` | **24-hex identifier** | **`ObjectId`** |
 
-### The `resource_id` key-name collision (read carefully)
+> **Caution:** the checked-in `mentorhub_mongodb_api/configurator/dictionaries/Journey.0.1.0.yaml`
+> is stale (that local checkout was 8 commits behind `origin/main`) and wrongly
+> lists `now[].resource_id` as `word`. Ignore it — trust the live curl. There is
+> **no `word` id field and no `resource_id` key-name collision**; encoding is
+> uniform across all id fields.
 
-`encode_document` encodes **by key name, recursively**. The key `resource_id`
-means an **ObjectId** under `library` but a **word/name** under `now`. A naive
-`encode_document(set_data, ["resource_id", ...])` would try `ObjectId("<a name>")`
-for `now` entries and raise `ValueError`. So encoding must be **scoped per
-sub-document** (encode the `library`/`next`/`later` subtrees, leave `now`
-alone), or the `now` name field should be renamed upstream (out of scope here).
+### `now[].resource_id` currently holds a name (code bug vs schema)
+
+The live schema requires `now[].resource_id` to be an id, but the code writes the
+resource **name**: `advance_resource` sets `"resource_id": resource.get("name",
+resource_id)` and `_find_now_entry` matches by name. This must change to store
+the **id** and match by id. Verify existing `now` data (it may contain names) and
+plan a migration if needed before flipping the write. Because `resource_id` now
+means the same thing everywhere, a single `encode_document(set_data, ["_id",
+"profile_id", "resource_id", "resources", "later"], ["added", "started",
+"completed"])`-style pass (scoped to the fields actually present in each write)
+is safe — no `ObjectId(<name>)` hazard.
 
 ## Goals
 
-- Identifier fields are stored as BSON `ObjectId` per the Journey schema:
-  - `next[].topics[].resources[]`, `library[].resource_id`, `later[]` are written as `ObjectId` (encoded at the `MongoIO` write boundary in `_module_to_next_module`/`promote_*`, `complete_resource`, and `advance_resource`'s `next` rewrite).
-  - `now[].resource_id` remains a **string name** (`word`); do not encode it.
-  - `library[].started`/`completed` remain `datetime` where written.
-- Encoding is done with `encode_document`, scoped to avoid the `resource_id` key collision (no `ObjectId(<name>)` attempts).
-- `_normalize_id` is **removed**; id comparisons operate on consistent types (encode the inbound id once, compare `ObjectId == ObjectId`, and match names separately for `now`).
+- All id fields are stored as BSON `ObjectId` per the live Journey schema:
+  - `next[].topics[].resources[]`, `library[].resource_id`, `later[]`, and `now[].resource_id` are written as `ObjectId` (encoded at the `MongoIO` write boundary in `_module_to_next_module`/`promote_*`, `complete_resource`, and `advance_resource`).
+  - `advance_resource` stores the resource **id** in `now[].resource_id` (not the name), and `_find_now_entry` matches by id.
+  - `library[].started`/`completed`/`now[].added` remain `datetime` where written.
+- Encoding is done with `encode_document` (scoped to the id/date fields present in each write); no `ObjectId(<name>)` hazard since all `resource_id` occurrences are ids.
+- `_normalize_id` is **removed**; id comparisons operate on consistent types (encode the inbound id once, then compare `ObjectId == ObjectId`).
 - No behavioral regression in `get_my_journey`, `advance_resource`, `complete_resource`, `promote_path_to_next`, `promote_module_to_next`, or `get_journey_progress`.
-- Backward compatibility with any existing string-typed Journey data is considered (a one-off data migration may be needed; document the decision in Execution Notes).
+- Backward compatibility with existing Journey data is considered — `now[].resource_id` may currently hold names — a one-off data migration may be needed; document the decision in Execution Notes.
 
 ## Testing Expectations
 
 Run all commands from the **api_utils repository root**.
 
 - `pipenv run db` — required (integration `MongoIO` tests + optional live schema fetch)
-- `pipenv run test` — full suite green; **add tests that assert stored element types** (e.g. promoted `next` resources and completed `library[].resource_id` are `ObjectId`, `now[].resource_id` stays a name string)
+- `pipenv run test` — full suite green; **add tests that assert stored element types** (e.g. promoted `next` resources, completed `library[].resource_id`, and `now[].resource_id` are all `ObjectId`); update the existing `advance`/`complete` mocks that currently use the resource *name* as `now[].resource_id`
 - `pipenv run lint`
 - `pipenv run build`
 - Consider an E2E pass (`pipenv run dev` + `pipenv run e2e`) covering advance → complete and promote flows, since stored shapes change.
