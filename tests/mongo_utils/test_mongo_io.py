@@ -14,9 +14,14 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import unittest
 from unittest import TestLoader
+import pytest
 from api_utils import Config, MongoIO
 from pymongo import ASCENDING, DESCENDING
 from unittest.mock import patch
+
+# These exercise a real MongoDB connection; isolate them behind the
+# `integration` marker so `pipenv run test` stays a pure, DB-free unit run.
+pytestmark = pytest.mark.integration
 
 
 class TestMongoIO(unittest.TestCase):

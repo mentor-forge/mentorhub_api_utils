@@ -54,8 +54,9 @@ Each task file must contain the following sections under H1 and H2 headings.
   - Should always include a description of the tests that should be used to verify completion.
   - In this repo, that typically means some combination of:
     - `pipenv install --dev` — refresh dependencies after `Pipfile` / lockfile changes (CodeArtifact auth; run `mh` first if needed)
-    - `pipenv run db` start the backing database (required for all testing)
-    = `pipenv run test` — unit tests (pytest, excludes `@pytest.mark.e2e`)
+    - `pipenv run db` start the backing database (required for integration and e2e testing)
+    - `pipenv run test` — pure unit tests (pytest, `-m "not e2e and not integration"`; no backing services)
+    - `pipenv run integration` — integration tests against the backing DB (`-m integration`; services + MongoIO); use this (not service-level type assertions) to cover DB-schema type safety
     - `pipenv run dev` — run API dev server locally (for manual or E2E verification)
     - `pipenv run e2e` — end-to-end tests against a running dev server
   - Should always include the **Packaging verification** step:
@@ -150,6 +151,20 @@ curl -X GET "http://localhost:8383/api/configurations/json_schema/<Dictionary>.y
 ```
 
 Replace `<Dictionary>` with the collection name (e.g. `Path`, `Resource`, `Note`). Use this response as the source of truth when updating `docs/openapi.yaml` component schemas or when implementing service projections. Do **not** use deprecated paths under `../mentorhub/Specifications/schemas/`.
+
+**Checking actual BSON storage types.** The JSON schema above is the HTTP/wire shape — it represents MongoDB `ObjectId`s as 24-hex **strings** (`"type":"string","pattern":"^[0-9a-fA-F]{24}$"`) and dates as ISO strings. To see how a field is actually **stored in MongoDB** (e.g. `objectId` vs `string`, `date` vs `string`), fetch the **BSON schema** instead. It requires an **explicit version** (there is no `latest`):
+
+```bash
+curl -X GET "http://localhost:8383/api/configurations/bson_schema/<Dictionary>.yaml/0.1.0.0/" -H "accept: application/json"
+```
+
+The version is the 4-segment collection version. **Pre-MVP, every collection is at `0.1.0.0`** and is not being versioned until MVP release. If unsure, list the available versions first:
+
+```bash
+curl -X GET "http://localhost:8383/api/configurations/<Dictionary>.yaml/" -H "accept: application/json"   # see .versions[].version
+```
+
+Use the `bson_schema` response as the authority for id-type decisions (`encode_document` id/date fields, `MongoIO` match encoding). Do **not** infer storage types from the checked-in dictionary YAML — those files can lag the deployed configurator.
 
 If the configurator is unavailable, set the task **Status** to `Blocked` and stop — do not fall back to dictionary YAML files in the `mentorhub_mongodb_api` repo.
 

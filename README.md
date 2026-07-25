@@ -2,6 +2,14 @@
 
 This repo builds and publishes the **`api_utils`** PyPI package (`pip install api-utils`) used across the [Mentor Hub](https://github.com/mentor-forge/mentorhub) system. Packages are published to **AWS CodeArtifact** in the Shared-Services account.
 
+## Current State
+
+Mentor Hub is **pre-MVP**. There is **no production environment yet**. Nothing here
+is running in production, so there is no live user data to migrate and breaking
+changes carry no production risk until MVP. Collection schemas are likewise
+unversioned for release purposes — every collection is at `0.1.0.0` and will not be
+formally versioned until we cut MVP.
+
 ## Prerequisites
 - Mentor Hub [Developers Edition](https://github.com/mentor-forge/mentorhub/blob/main/CONTRIBUTING.md)
 - Developer [SPA Standard Prerequisites](https://github.com/mentor-forge/mentorhub/blob/main/DeveloperEdition/standards/spa_standards.md)
@@ -19,11 +27,14 @@ pipenv install
 ## Install dependencies
 pipenv install --dev
 
-# start backing db container (required for MongoIO unit/integration tests)
+# start backing db container (required for integration and e2e tests)
 pipenv run db
 
-## run unit tests (includes MongoIO Integration Tests)
+## run unit tests (pure/mocked, no backing services)
 pipenv run test
+
+## run integration tests (exercise services + MongoIO against the DB; run `pipenv run db` first)
+pipenv run integration
 
 ## run demo dev server - captures command line, serves API at localhost:9092
 ## Note: dev uses a fixed JWT_SECRET for local E2E; see tests/e2e_auth.py
@@ -50,7 +61,7 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.5.2`). Releasing is two steps:
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.6.0`). Releasing is two steps:
 - Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
 - After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
 
@@ -60,9 +71,9 @@ Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.5.2`). Releasing 
 
 - `api_utils/` - Main package containing:
   - `config/` - Configuration singleton with support for file, environment, and default values
-  - `flask_utils/` - Flask-specific utilities (JSON encoder, token, breadcrumb)
-  - `mongo_utils/` - MongoDB utilities (MongoIO singleton, document encoding, list query, legacy infinite scroll)
-  - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation)
+  - `flask_utils/` - Flask-specific utilities (`MongoJSONEncoder` outbound id/date → string, token, breadcrumb)
+  - `mongo_utils/` - MongoDB utilities (MongoIO singleton, `encode_document` inbound string → ObjectId/datetime, list query, legacy infinite scroll)
+  - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation, Plan, Mentee, Encounter, Profile)
   - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer)
 
 - `tests/` - Test suite for all components
@@ -76,6 +87,47 @@ from api_utils.services import JourneyService, PathService
 # or
 from api_utils import JourneyService, PathService
 ```
+
+The full shared surface is: `AggregationService`, `EncounterService`,
+`EventService`, `JourneyService`, `MenteeService`, `NoteService`, `PathService`,
+`PlanService`, `ProfileService`, and `ResourceService`.
+
+### MongoDB ObjectId handling (inbound vs outbound)
+
+MongoDB document `_id`s (and other id/date fields) are BSON types in the
+database but plain strings on the HTTP wire. Two utilities own that conversion,
+and **service code should rely on them rather than hand-rolling `ObjectId(...)`
+or `str(...)` conversions**:
+
+- **Inbound — `api_utils.mongo_utils.encode_document`** (write / query side):
+  Ids arriving from clients are handled as **strings** all the way through the
+  service, and are encoded to BSON `ObjectId` (and ISO strings to `datetime`)
+  **at the last moment, immediately before the `MongoIO` call**. Name the id and
+  date fields explicitly:
+
+  ```python
+  from api_utils.mongo_utils import encode_document
+
+  encode_document(document, ["_id", "profile_id"], ["completed"])
+  MongoIO.get_instance().create_document(collection, document)
+  ```
+
+  This matters for **match filters** too: `MongoIO.get_documents(match=...)` does
+  **not** coerce match values (unlike `get_document` / `update_document`, which
+  wrap `document_id` in `ObjectId(...)`). An unencoded string id in a `match`
+  silently matches nothing against a stored `ObjectId`, so encode the id in the
+  filter first.
+
+- **Outbound — `api_utils.flask_utils.ejson_encoder.MongoJSONEncoder`**
+  (read / response side): documents read from Mongo keep their `ObjectId` /
+  `datetime` values **unchanged** as they flow back through services and routes.
+  They are decoded to strings **only at the final step**, when Flask serializes
+  the HTTP reply. The encoder is registered app-wide (`app.json =
+  MongoJSONEncoder(app)` in `server.py`), so route/service code should **not**
+  pre-stringify ids for output.
+
+In short: **strings in, encode at the `MongoIO` boundary; `ObjectId` out, decode
+at the Flask serialization boundary.**
 
 ### Standardized Get List pattern
 
