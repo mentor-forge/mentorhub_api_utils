@@ -17,7 +17,6 @@ from api_utils.mongo_utils.list_query import (
 from api_utils.flask_utils.exceptions import (
     HTTPForbidden,
     HTTPInternalServerError,
-    HTTPNotFound,
 )
 import logging
 
@@ -46,7 +45,7 @@ class NotificationService:
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """Any authenticated user may create, read, and dismiss notifications."""
+        """Any authenticated user may create and read notifications."""
         pass
 
     @classmethod
@@ -143,46 +142,3 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Error retrieving notifications: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve notifications")
-
-    @classmethod
-    def dismiss_notification(cls, notification_id, token, breadcrumb):
-        """
-        Set the dismissed breadcrumb on a notification document.
-
-        Args:
-            notification_id: The notification ID to dismiss
-            token: Token dictionary with user_id and roles
-            breadcrumb: Breadcrumb dictionary written to dismissed
-
-        Returns:
-            dict: The updated notification document
-
-        Raises:
-            HTTPNotFound: If the notification is not found
-        """
-        try:
-            cls._check_permission(token, "update")
-
-            mongo = MongoIO.get_instance()
-            config = Config.get_instance()
-            updated = mongo.update_document(
-                config.NOTIFICATION_COLLECTION_NAME,
-                document_id=notification_id,
-                set_data={"dismissed": breadcrumb},
-            )
-
-            if updated is None:
-                raise HTTPNotFound(f"Notification {notification_id} not found")
-
-            logger.info(
-                f"Dismissed notification {notification_id} "
-                f"for user {token.get('user_id')}"
-            )
-            return updated
-        except (HTTPForbidden, HTTPNotFound):
-            raise
-        except Exception as e:
-            logger.error(f"Error dismissing notification {notification_id}: {str(e)}")
-            raise HTTPInternalServerError(
-                f"Failed to dismiss notification {notification_id}"
-            )
