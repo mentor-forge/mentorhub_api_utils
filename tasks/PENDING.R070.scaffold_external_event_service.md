@@ -17,23 +17,26 @@ Always read these files before implementation:
 - `README.md`
 - `tasks/_PLANNING.md` — **MongoDB dictionary schemas** (fetch live JSON schema from configurator)
 - `tasks/PENDING.R069.add_ingress_collection_constants.md`
-- `api_utils/config/config.py` — `EXTERNAL_EVENT_COLLECTION_NAME`
+- `api_utils/config/config.py` — `EXTERNAL_EVENT_COLLECTION_NAME` (`ExternalEvent`)
 - `api_utils/services/event_service.py` — append/create pattern reference
 - `api_utils/mongo_utils/mongo_io.py`
 - `api_utils/mongo_utils/encode_properties.py`
 - `../mentorhub/Workshops/admin_journey_issues.md` — F-AA02 goals
-- `../mentorhub/Workshops/customer_journey_issues.md` — ExternalEvent dictionary summary
+- `../mentorhub_mongodb_api/configurator/configurations/ExternalEvent.yaml` — collection name and indexes (unique `source` + `external_id`)
+- `../mentorhub_mongodb_api/configurator/dictionaries/ExternalEvent.0.1.0.yaml` — field names for planning; **do not** treat YAML as write source of truth
 
 ### External prerequisite
 
-F-D29 must deploy the **ExternalEvent** dictionary to the configurator before integration tests can run. If `curl` for `ExternalEvent.yaml/latest` fails with the DB up (`pipenv run db`), set task **Status** to `Blocked` and stop — do not guess field shapes from workshop prose.
+F-D29 **ExternalEvent** is in `mentorhub_mongodb_api` at version `0.1.0.0`. Execution must still fetch JSON/BSON schema from the **running configurator** per `_PLANNING.md`. If `curl` for `ExternalEvent.yaml/latest` fails with the DB up (`pipenv run db`), set task **Status** to `Blocked` and stop — do not guess field shapes from workshop prose or checked-in YAML.
+
+Planning snapshot of dictionary fields (confirm live): `_id`, `source` (`external_event_source`: `stripe` \| `cognito`), `external_id`, `payload_hash`, `normalized_body`, `created`. Append-only — **no** `saved` breadcrumb.
 
 ### MVP surface (api_utils)
 
 - `create_external_event(data, token, breadcrumb)` — strip client `_id` / `created`; encode id fields per live schema; set `created` breadcrumb; `MongoIO.create_document` on `config.EXTERNAL_EVENT_COLLECTION_NAME`; **no update/delete**
 - `_check_permission(token, operation)` — auth placeholder consistent with other services
 
-Ingress-specific idempotency (external id dedup) may be added in Admin API (F-AA02) — keep api_utils layer thin.
+Ingress-specific idempotency (unique `source` + `external_id`) may be added in Admin API (F-AA02) — keep api_utils layer thin. Duplicate inserts may raise from the Mongo unique index; do not add a second lookup path here.
 
 ## Goals
 
@@ -48,7 +51,7 @@ Ingress-specific idempotency (external id dedup) may be added in Admin API (F-AA
 - `pipenv run test`
 - `pipenv run lint`
 - `pipenv run build`
-- Optional when F-D29 is live: `pipenv run db` + `pipenv run integration` for one create round-trip (document in **Execution Notes** if skipped)
+- Optional when configurator is live: `pipenv run db` + `pipenv run integration` for one create round-trip (document in **Execution Notes** if skipped)
 
 ## Outputs
 

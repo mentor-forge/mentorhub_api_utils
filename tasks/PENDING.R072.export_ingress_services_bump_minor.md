@@ -23,7 +23,7 @@ Always read these files before implementation:
 
 ### Versioning
 
-- **Minor** bump: additive Config constants refactor, dropped legacy collection keys, two new services — backward compatible for consumers that did not rely on Card/Dashboard/Subscription config keys.
+- **Minor** bump: additive Config constants refactor (including ExternalEvent, Notification, Setting, Payment), dropped legacy collection keys (Identity, Login, Card, Dashboard, Subscription), two new services — backward compatible for consumers that did not rely on the dropped config keys.
 - Expected `0.6.0` → **`0.7.0`**. If another release landed first, increment current minor by one.
 
 Publishing to CodeArtifact is after PR merge via `pipenv run tag-release` — not in this task.
