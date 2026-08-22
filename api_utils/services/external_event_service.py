@@ -11,6 +11,12 @@ from api_utils.mongo_utils import encode_document
 from api_utils.flask_utils.exceptions import (
     HTTPForbidden,
     HTTPInternalServerError,
+    HTTPNotFound,
+)
+from api_utils.services.rbac import (
+    EMPTY_SCOPE_MATCH,
+    build_outbound_match,
+    require_outbound,
 )
 import logging
 
@@ -28,13 +34,18 @@ class ExternalEventService:
     Service class for ExternalEvent domain operations (append-only).
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """Any authenticated user may create external events."""
         pass
 
-    @staticmethod
-    def create_external_event(data, token, breadcrumb):
+    @classmethod
+    def _outbound_match(cls, token):
+        """Admin controls ExternalEvent; non-admin callers see nothing."""
+        return build_outbound_match(token, [EMPTY_SCOPE_MATCH])
+
+    @classmethod
+    def create_external_event(cls, data, token, breadcrumb):
         """
         Create a new external event document.
 
@@ -47,7 +58,7 @@ class ExternalEventService:
             dict: The created external event document including _id
         """
         try:
-            ExternalEventService._check_permission(token, "create")
+            cls._check_permission(token, "create")
 
             if "_id" in data:
                 del data["_id"]
@@ -76,4 +87,45 @@ class ExternalEventService:
             logger.error(f"Error creating external event: {error_msg}")
             raise HTTPInternalServerError(
                 f"Failed to create external event: {error_msg}"
+            )
+
+    @classmethod
+    def get_external_event(cls, event_id, token, breadcrumb):
+        """
+        Retrieve a specific external event document by ID.
+
+        Args:
+            event_id: The external event ID to retrieve
+            token: Token dictionary with user_id and roles
+            breadcrumb: Breadcrumb dictionary for logging
+
+        Returns:
+            dict: The external event document
+
+        Raises:
+            HTTPNotFound: If external event is not found or not visible
+        """
+        try:
+            cls._check_permission(token, "read")
+
+            mongo = MongoIO.get_instance()
+            config = Config.get_instance()
+            event = mongo.get_document(config.EXTERNAL_EVENT_COLLECTION_NAME, event_id)
+            require_outbound(
+                event,
+                cls._outbound_match(token),
+                not_found_message=f"External event {event_id} not found",
+            )
+
+            logger.info(
+                f"Retrieved external event {event_id} "
+                f"for user {token.get('user_id')}"
+            )
+            return event
+        except HTTPNotFound:
+            raise
+        except Exception as e:
+            logger.error(f"Error retrieving external event {event_id}: {str(e)}")
+            raise HTTPInternalServerError(
+                f"Failed to retrieve external event {event_id}"
             )

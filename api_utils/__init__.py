@@ -24,6 +24,20 @@ from .mongo_utils.list_query import (
 from .routes.config_routes import create_config_routes
 from .routes.metric_routes import create_metric_routes
 from .routes.explorer_routes import create_explorer_routes
+from .routes.shared_get_routes import (
+    create_aggregation_get_routes,
+    create_encounter_get_routes,
+    create_event_get_routes,
+    create_external_event_get_routes,
+    create_journey_get_routes,
+    create_mentee_get_routes,
+    create_note_get_routes,
+    create_notification_get_routes,
+    create_path_get_routes,
+    create_plan_get_routes,
+    create_profile_get_routes,
+    create_resource_get_routes,
+)
 from .services import (
     AggregationService,
     EventService,
@@ -72,6 +86,18 @@ __all__ = [
     create_config_routes,
     create_metric_routes,
     create_explorer_routes,
+    create_aggregation_get_routes,
+    create_encounter_get_routes,
+    create_event_get_routes,
+    create_external_event_get_routes,
+    create_journey_get_routes,
+    create_mentee_get_routes,
+    create_note_get_routes,
+    create_notification_get_routes,
+    create_path_get_routes,
+    create_plan_get_routes,
+    create_profile_get_routes,
+    create_resource_get_routes,
     # Domain Services
     AggregationService,
     EventService,

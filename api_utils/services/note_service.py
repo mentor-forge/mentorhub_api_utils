@@ -6,27 +6,28 @@ Handles RBAC checks and MongoDB operations for Note domain.
 
 from bson import ObjectId
 
-from api_utils import MongoIO, Config
+from api_utils import Config
 from api_utils.mongo_utils import encode_document
 from api_utils.mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
     MAX_SIZE,
+    and_match,
     build_match_filter,
     build_sort_by,
     execute_list_query,
 )
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
-    HTTPForbidden,
     HTTPInternalServerError,
 )
+from api_utils.services.rbac import EMPTY_SCOPE_MATCH, build_outbound_match
 import logging
 
 logger = logging.getLogger(__name__)
 
-ID_PROPERTIES = ["_id", "resource_id", "profile_id"]
-DATE_PROPERTIES = []
+ARCHIVED_STATUS = "archived"
+NOTE_ID_PROPERTIES = ["profile_id"]
 
 NOTE_LIST_FILTERS = {
     "status": {"type": "in_list", "field": "status"},
@@ -40,54 +41,37 @@ NOTE_LIST_ORDER = {
 
 class NoteService:
     """
-    Service class for Note domain operations.
+    Service class for Note domain operations (read-only in shared api_utils).
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
-        """Any authenticated user may create and read notes."""
+    @classmethod
+    def _check_permission(cls, token, operation):
+        """Any authenticated user may read notes; outbound filtering applies separately."""
         pass
 
-    @staticmethod
-    def create_note(data, token, breadcrumb):
-        """
-        Create a new note document.
+    @classmethod
+    def _note_identity_or(cls, token):
+        """Own-profile scope; Note schema has no customer_id field."""
+        profile_id = token.get("profile_id")
+        if not profile_id:
+            return EMPTY_SCOPE_MATCH
+        clause = {"profile_id": profile_id}
+        encode_document(clause, NOTE_ID_PROPERTIES, [])
+        return {"$or": [clause]}
 
-        Args:
-            data: Dictionary containing note data
-            token: Token dictionary with user_id and roles
-            breadcrumb: Breadcrumb dictionary for logging
+    @classmethod
+    def _outbound_match(cls, token):
+        return build_outbound_match(
+            token,
+            [
+                {"status": {"$ne": ARCHIVED_STATUS}},
+                cls._note_identity_or(token),
+            ],
+        )
 
-        Returns:
-            dict: The created note document including _id
-        """
-        try:
-            NoteService._check_permission(token, "create")
-
-            if "_id" in data:
-                del data["_id"]
-
-            encode_document(data, ID_PROPERTIES, DATE_PROPERTIES)
-
-            data["created"] = breadcrumb
-            data["saved"] = breadcrumb
-
-            mongo = MongoIO.get_instance()
-            config = Config.get_instance()
-            note_id = mongo.create_document(config.NOTE_COLLECTION_NAME, data)
-            if "_id" not in data:
-                data["_id"] = ObjectId(note_id)
-            logger.info(f"Created note {note_id} for user {token.get('user_id')}")
-            return data
-        except HTTPForbidden:
-            raise
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Error creating note: {error_msg}")
-            raise HTTPInternalServerError(f"Failed to create note: {error_msg}")
-
-    @staticmethod
+    @classmethod
     def get_notes_for_resource(
+        cls,
         resource_id,
         token,
         breadcrumb,
@@ -112,7 +96,7 @@ class NoteService:
             list: Note documents for the resource
         """
         try:
-            NoteService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             from bson.errors import InvalidId
 
@@ -122,7 +106,10 @@ class NoteService:
                 raise HTTPBadRequest("resource_id must be a valid MongoDB ObjectId")
 
             config = Config.get_instance()
-            base_match = {"resource_id": resource_object_id}
+            base_match = and_match(
+                {"resource_id": resource_object_id},
+                cls._outbound_match(token),
+            )
             match = build_match_filter(base_match, filters or {}, NOTE_LIST_FILTERS)
             if sort_by is None:
                 default = NOTE_LIST_ORDER["default"]
@@ -151,10 +138,10 @@ class NoteService:
                 f"Failed to retrieve notes for resource {resource_id}"
             )
 
-    @staticmethod
-    def list_all_notes_for_resource(resource_id, token, breadcrumb):
+    @classmethod
+    def list_all_notes_for_resource(cls, resource_id, token, breadcrumb):
         """Return all notes for a resource (composite/detail reads)."""
-        return NoteService.get_notes_for_resource(
+        return cls.get_notes_for_resource(
             resource_id,
             token,
             breadcrumb,

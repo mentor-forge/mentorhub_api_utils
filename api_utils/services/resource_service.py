@@ -7,17 +7,18 @@ Handles RBAC checks and MongoDB operations for Resource domain.
 from api_utils import MongoIO, Config
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
-    HTTPForbidden,
     HTTPNotFound,
     HTTPInternalServerError,
 )
 from api_utils.mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
+    and_match,
     build_match_filter,
     build_sort_by,
     execute_list_query,
 )
+from api_utils.services.rbac import build_outbound_match, require_outbound
 import logging
 
 from bson import ObjectId
@@ -53,32 +54,24 @@ class ResourceService:
     Service class for Resource domain operations.
 
     Handles:
-    - RBAC authorization checks (placeholder for future implementation)
+    - Outbound RBAC visibility on shared GET/list
     - MongoDB operations via MongoIO singleton
     - Business logic for Resource domain (read-only)
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
-        """
-        Check if the user has permission to perform an operation.
-
-        Args:
-            token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read')
-
-        Raises:
-            HTTPForbidden: If user doesn't have required permission
-        """
+    @classmethod
+    def _check_permission(cls, token, operation):
+        """Shared reads require a valid token only; outbound filtering applies separately."""
         pass
 
-    @staticmethod
-    def _is_admin(token, config):
-        admin_role = getattr(config, "ROLE_ADMIN", "admin")
-        return admin_role in token.get("roles", [])
+    @classmethod
+    def _outbound_match(cls, token):
+        """Catalog consume: non-admin callers see non-archived resources only."""
+        return build_outbound_match(token, [{"status": {"$ne": ARCHIVED_STATUS}}])
 
-    @staticmethod
+    @classmethod
     def get_resources(
+        cls,
         token,
         breadcrumb,
         offset=DEFAULT_OFFSET,
@@ -104,14 +97,12 @@ class ResourceService:
             HTTPBadRequest: If invalid parameters provided
         """
         try:
-            ResourceService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             config = Config.get_instance()
-            base_match = {}
-            if not ResourceService._is_admin(token, config):
-                base_match["status"] = {"$ne": ARCHIVED_STATUS}
-
-            match = build_match_filter(base_match, filters or {}, RESOURCE_LIST_FILTERS)
+            match = build_match_filter(
+                cls._outbound_match(token), filters or {}, RESOURCE_LIST_FILTERS
+            )
             if sort_by is None:
                 default = RESOURCE_LIST_ORDER["default"]
                 sort_by = build_sort_by(
@@ -137,16 +128,16 @@ class ResourceService:
             logger.error(f"Error retrieving resources: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve resources")
 
-    @staticmethod
-    def _to_resource_summary(resource):
+    @classmethod
+    def _to_resource_summary(cls, resource):
         return {
             "_id": str(resource["_id"]),
             "name": resource.get("name"),
             "description": resource.get("description"),
         }
 
-    @staticmethod
-    def get_resources_by_ids(resource_ids, token, breadcrumb):
+    @classmethod
+    def get_resources_by_ids(cls, resource_ids, token, breadcrumb):
         """
         Get minimal Resource summaries for a list of Resource IDs.
 
@@ -159,7 +150,7 @@ class ResourceService:
             list: Minimal resource dicts with _id, name, and description
         """
         try:
-            ResourceService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             unique_ids = []
             seen = set()
@@ -185,9 +176,10 @@ class ResourceService:
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
 
-            query = {"_id": {"$in": object_ids}}
-            if not ResourceService._is_admin(token, config):
-                query["status"] = {"$ne": ARCHIVED_STATUS}
+            query = and_match(
+                {"_id": {"$in": object_ids}},
+                cls._outbound_match(token),
+            )
 
             documents = mongo.get_documents(
                 config.RESOURCE_COLLECTION_NAME,
@@ -195,9 +187,7 @@ class ResourceService:
                 project={"name": 1, "description": 1},
             )
 
-            summaries = [
-                ResourceService._to_resource_summary(resource) for resource in documents
-            ]
+            summaries = [cls._to_resource_summary(resource) for resource in documents]
 
             logger.info(
                 f"Retrieved {len(summaries)} resource summaries "
@@ -208,10 +198,10 @@ class ResourceService:
             logger.error(f"Error retrieving resources by ids: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve resources by ids")
 
-    @staticmethod
-    def get_resource(resource_id, token, breadcrumb):
+    @classmethod
+    def get_resource(cls, resource_id, token, breadcrumb):
         """
-        Retrieve a resource detail composite.
+        Retrieve a specific resource document by ID.
 
         Args:
             resource_id: The resource ID to retrieve
@@ -219,38 +209,27 @@ class ResourceService:
             breadcrumb: Breadcrumb dictionary for logging
 
         Returns:
-            dict: {resource, aggregation, notes}
+            dict: The resource document
 
         Raises:
-            HTTPNotFound: If resource is not found
+            HTTPNotFound: If resource is not found or not visible
         """
         try:
-            ResourceService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
             resource = mongo.get_document(config.RESOURCE_COLLECTION_NAME, resource_id)
-            if resource is None:
-                raise HTTPNotFound(f"Resource { resource_id} not found")
-
-            from api_utils.services.aggregation_service import AggregationService
-            from api_utils.services.note_service import NoteService
-
-            aggregation = AggregationService.get_aggregation_for_resource(
-                resource_id, token, breadcrumb
-            )
-            notes = NoteService.list_all_notes_for_resource(
-                resource_id, token, breadcrumb
+            require_outbound(
+                resource,
+                cls._outbound_match(token),
+                not_found_message=f"Resource {resource_id} not found",
             )
 
             logger.info(
-                f"Retrieved resource detail { resource_id} for user {token.get('user_id')}"
+                f"Retrieved resource { resource_id} for user {token.get('user_id')}"
             )
-            return {
-                "resource": resource,
-                "aggregation": aggregation,
-                "notes": notes,
-            }
+            return resource
         except HTTPNotFound:
             raise
         except Exception as e:

@@ -68,6 +68,20 @@ class TestFilterParsing(unittest.TestCase):
         self.assertEqual(match["name"]["$regex"], "alpha")
         self.assertEqual(match["status"]["$in"], ["active"])
 
+    def test_build_match_filter_and_colliding_status(self):
+        base = {"status": {"$ne": "archived"}}
+        parsed = {"status": ["active"]}
+        match = build_match_filter(base, parsed, RESOURCE_LIST_FILTERS)
+        self.assertEqual(
+            match,
+            {
+                "$and": [
+                    {"status": {"$ne": "archived"}},
+                    {"status": {"$in": ["active"]}},
+                ]
+            },
+        )
+
 
 class TestResourceMultiFieldFilters(unittest.TestCase):
     """Coverage for Resource SERVICE_RESOURCE_LIST_FILTERS (url, interests, etc.)."""

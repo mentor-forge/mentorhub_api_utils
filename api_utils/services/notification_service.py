@@ -11,17 +11,20 @@ from api_utils.mongo_utils import encode_document
 from api_utils.mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
+    and_match,
     build_sort_by,
     execute_list_query,
 )
 from api_utils.flask_utils.exceptions import (
     HTTPForbidden,
     HTTPInternalServerError,
-    HTTPNotFound,
 )
+from api_utils.services.rbac import build_outbound_match
 import logging
 
 logger = logging.getLogger(__name__)
+
+ARCHIVED_STATUS = "archived"
 
 # Live BSON schema (Notification 0.1.0.0): `_id`, `profile_id`, `customer_id`,
 # and `mentor_id` are objectId. Breadcrumb `at_time` fields are dates;
@@ -44,13 +47,34 @@ class NotificationService:
     Service class for Notification domain operations.
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
-        """Any authenticated user may create, read, and dismiss notifications."""
+    @classmethod
+    def _check_permission(cls, token, operation):
+        """Any authenticated user may create and read notifications."""
         pass
 
-    @staticmethod
-    def create_notification(data, token, breadcrumb):
+    @classmethod
+    def _notification_identity_or(cls, token):
+        or_clauses = [{"global": {"$exists": True}}]
+        for field in ("profile_id", "customer_id", "mentor_id"):
+            value = token.get(field)
+            if value:
+                clause = {field: value}
+                encode_document(clause, ID_PROPERTIES, DATE_PROPERTIES)
+                or_clauses.append(clause)
+        return {"$or": or_clauses}
+
+    @classmethod
+    def _outbound_match(cls, token):
+        return build_outbound_match(
+            token,
+            [
+                {"status": {"$ne": ARCHIVED_STATUS}},
+                cls._notification_identity_or(token),
+            ],
+        )
+
+    @classmethod
+    def create_notification(cls, data, token, breadcrumb):
         """
         Create a new notification document.
 
@@ -63,7 +87,7 @@ class NotificationService:
             dict: The created notification document including _id
         """
         try:
-            NotificationService._check_permission(token, "create")
+            cls._check_permission(token, "create")
 
             for field in SYSTEM_MANAGED_FIELDS:
                 data.pop(field, None)
@@ -91,8 +115,9 @@ class NotificationService:
             logger.error(f"Error creating notification: {error_msg}")
             raise HTTPInternalServerError(f"Failed to create notification: {error_msg}")
 
-    @staticmethod
+    @classmethod
     def get_notifications(
+        cls,
         token,
         breadcrumb,
         *,
@@ -108,18 +133,19 @@ class NotificationService:
             breadcrumb: Audit breadcrumb
             offset: Zero-based start index
             size: Number of documents to return
-            match: Optional MongoDB match filter callers can extend later
+            match: Optional MongoDB match filter AND'd with outbound scope
 
         Returns:
             list: Notification documents newest first by created.at_time
         """
         try:
-            NotificationService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             config = Config.get_instance()
-            list_match = dict(match) if match else {}
-            if list_match:
-                encode_document(list_match, ID_PROPERTIES, DATE_PROPERTIES)
+            extra = dict(match) if match else {}
+            if extra:
+                encode_document(extra, ID_PROPERTIES, DATE_PROPERTIES)
+            list_match = and_match(cls._outbound_match(token), extra)
 
             default = NOTIFICATION_LIST_ORDER["default"]
             sort_by = build_sort_by(
@@ -142,46 +168,3 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Error retrieving notifications: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve notifications")
-
-    @staticmethod
-    def dismiss_notification(notification_id, token, breadcrumb):
-        """
-        Set the dismissed breadcrumb on a notification document.
-
-        Args:
-            notification_id: The notification ID to dismiss
-            token: Token dictionary with user_id and roles
-            breadcrumb: Breadcrumb dictionary written to dismissed
-
-        Returns:
-            dict: The updated notification document
-
-        Raises:
-            HTTPNotFound: If the notification is not found
-        """
-        try:
-            NotificationService._check_permission(token, "update")
-
-            mongo = MongoIO.get_instance()
-            config = Config.get_instance()
-            updated = mongo.update_document(
-                config.NOTIFICATION_COLLECTION_NAME,
-                document_id=notification_id,
-                set_data={"dismissed": breadcrumb},
-            )
-
-            if updated is None:
-                raise HTTPNotFound(f"Notification {notification_id} not found")
-
-            logger.info(
-                f"Dismissed notification {notification_id} "
-                f"for user {token.get('user_id')}"
-            )
-            return updated
-        except (HTTPForbidden, HTTPNotFound):
-            raise
-        except Exception as e:
-            logger.error(f"Error dismissing notification {notification_id}: {str(e)}")
-            raise HTTPInternalServerError(
-                f"Failed to dismiss notification {notification_id}"
-            )

@@ -7,10 +7,7 @@ from unittest.mock import patch, MagicMock
 from bson import ObjectId
 from pymongo import DESCENDING
 from api_utils.services.notification_service import NotificationService
-from api_utils.flask_utils.exceptions import (
-    HTTPInternalServerError,
-    HTTPNotFound,
-)
+from api_utils.flask_utils.exceptions import HTTPInternalServerError
 from api_utils.mongo_utils.list_query import DEFAULT_OFFSET, DEFAULT_SIZE
 
 CREATED_ID = "507f1f77bcf86cd799439011"
@@ -169,6 +166,7 @@ class TestNotificationService(unittest.TestCase):
     def test_get_notifications_success(self, mock_get_config, mock_execute_list):
         mock_config = MagicMock()
         mock_config.NOTIFICATION_COLLECTION_NAME = "Notification"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
         mock_execute_list.return_value = [{"_id": "1", "name": "Invite pending"}]
 
@@ -190,6 +188,34 @@ class TestNotificationService(unittest.TestCase):
 
     @patch("api_utils.services.notification_service.execute_list_query")
     @patch("api_utils.services.notification_service.Config.get_instance")
+    def test_get_notifications_outbound_includes_global_and_own_ids(
+        self, mock_get_config, mock_execute_list
+    ):
+        mock_config = MagicMock()
+        mock_config.NOTIFICATION_COLLECTION_NAME = "Notification"
+        mock_config.ROLE_ADMIN = "admin"
+        mock_get_config.return_value = mock_config
+        mock_execute_list.return_value = []
+
+        token = {
+            "user_id": "carol",
+            "roles": ["customer"],
+            "profile_id": PROFILE_ID,
+            "customer_id": CUSTOMER_ID,
+        }
+        NotificationService.get_notifications(token, self.mock_breadcrumb)
+
+        match = mock_execute_list.call_args.kwargs["match"]
+        self.assertEqual(match["status"], {"$ne": "archived"})
+        or_clauses = match["$or"]
+        self.assertIn({"global": {"$exists": True}}, or_clauses)
+        profile_ids = [clause.get("profile_id") for clause in or_clauses]
+        customer_ids = [clause.get("customer_id") for clause in or_clauses]
+        self.assertIn(ObjectId(PROFILE_ID), profile_ids)
+        self.assertIn(ObjectId(CUSTOMER_ID), customer_ids)
+
+    @patch("api_utils.services.notification_service.execute_list_query")
+    @patch("api_utils.services.notification_service.Config.get_instance")
     def test_get_notifications_encodes_match_ids(
         self, mock_get_config, mock_execute_list
     ):
@@ -207,92 +233,8 @@ class TestNotificationService(unittest.TestCase):
         call_kwargs = mock_execute_list.call_args[1]
         self.assertEqual(call_kwargs["match"]["profile_id"], ObjectId(PROFILE_ID))
 
-    @patch("api_utils.services.notification_service.Config.get_instance")
-    @patch("api_utils.services.notification_service.MongoIO.get_instance")
-    def test_dismiss_notification_success(self, mock_get_mongo, mock_get_config):
-        mock_config = MagicMock()
-        mock_config.NOTIFICATION_COLLECTION_NAME = "Notification"
-        mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.update_document.return_value = {
-            "_id": CREATED_ID,
-            "name": "Invite pending",
-            "dismissed": self.mock_breadcrumb,
-        }
-        mock_get_mongo.return_value = mock_mongo
-
-        updated = NotificationService.dismiss_notification(
-            CREATED_ID, self.mock_token, self.mock_breadcrumb
-        )
-
-        self.assertEqual(updated["dismissed"], self.mock_breadcrumb)
-        mock_mongo.update_document.assert_called_once()
-        call_args = mock_mongo.update_document.call_args
-        self.assertEqual(call_args[0][0], "Notification")
-        self.assertEqual(call_args[1]["document_id"], CREATED_ID)
-        set_data = call_args[1]["set_data"]
-        self.assertEqual(set_data, {"dismissed": self.mock_breadcrumb})
-        self.assertNotIn("saved", set_data)
-        self.assertNotIn("dismissed_flag", set_data)
-
-    @patch("api_utils.services.notification_service.Config.get_instance")
-    @patch("api_utils.services.notification_service.MongoIO.get_instance")
-    def test_dismiss_notification_does_not_set_saved(
-        self, mock_get_mongo, mock_get_config
-    ):
-        mock_config = MagicMock()
-        mock_config.NOTIFICATION_COLLECTION_NAME = "Notification"
-        mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.update_document.return_value = {
-            "_id": CREATED_ID,
-            "dismissed": self.mock_breadcrumb,
-        }
-        mock_get_mongo.return_value = mock_mongo
-
-        NotificationService.dismiss_notification(
-            CREATED_ID, self.mock_token, self.mock_breadcrumb
-        )
-
-        set_data = mock_mongo.update_document.call_args[1]["set_data"]
-        self.assertNotIn("saved", set_data)
-        self.assertIn("dismissed", set_data)
-
-    @patch("api_utils.services.notification_service.Config.get_instance")
-    @patch("api_utils.services.notification_service.MongoIO.get_instance")
-    def test_dismiss_notification_not_found(self, mock_get_mongo, mock_get_config):
-        mock_config = MagicMock()
-        mock_config.NOTIFICATION_COLLECTION_NAME = "Notification"
-        mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.update_document.return_value = None
-        mock_get_mongo.return_value = mock_mongo
-
-        with self.assertRaises(HTTPNotFound):
-            NotificationService.dismiss_notification(
-                "999", self.mock_token, self.mock_breadcrumb
-            )
-
-    @patch("api_utils.services.notification_service.Config.get_instance")
-    @patch("api_utils.services.notification_service.MongoIO.get_instance")
-    def test_dismiss_notification_handles_exception(
-        self, mock_get_mongo, mock_get_config
-    ):
-        mock_config = MagicMock()
-        mock_config.NOTIFICATION_COLLECTION_NAME = "Notification"
-        mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.update_document.side_effect = Exception("Database error")
-        mock_get_mongo.return_value = mock_mongo
-
-        with self.assertRaises(HTTPInternalServerError):
-            NotificationService.dismiss_notification(
-                CREATED_ID, self.mock_token, self.mock_breadcrumb
-            )
+    def test_shared_service_has_no_dismiss_notification(self):
+        self.assertFalse(hasattr(NotificationService, "dismiss_notification"))
 
 
 if __name__ == "__main__":

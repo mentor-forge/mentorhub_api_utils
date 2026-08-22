@@ -49,6 +49,32 @@ tags:
     description: Runtime configuration endpoints
   - name: Monitoring
     description: Prometheus metrics and health endpoints
+  - name: Documentation
+    description: Static API documentation files
+  - name: Resource
+    description: Resource consume GET endpoints
+  - name: Path
+    description: Path consume GET endpoints
+  - name: Plan
+    description: Plan consume GET endpoints
+  - name: Profile
+    description: Profile consume GET endpoints
+  - name: Notification
+    description: Notification consume GET endpoints
+  - name: Event
+    description: Event consume GET endpoints
+  - name: Note
+    description: Note consume GET endpoints
+  - name: Journey
+    description: Journey consume GET endpoints
+  - name: Encounter
+    description: Encounter consume GET endpoints
+  - name: Mentee
+    description: Mentee consume GET endpoints
+  - name: Aggregation
+    description: Aggregation consume GET endpoints
+  - name: External Event
+    description: External Event consume GET endpoints
 
 paths:
   /api/config:
@@ -160,6 +186,441 @@ paths:
             # Access the API explorer
             curl -X GET "http://localhost:8385/docs/explorer.html"
 
+  /api/resource:
+    get:
+      tags:
+        - Resource
+      summary: List Resource documents
+      description: |
+        Retrieve a paginated array of Resource documents.
+
+        Pagination uses request headers `offset` (default `0`) and `size` (default `20`, max `100`).
+        Optional query filters and `sort_by` / `order` params are whitelisted per service list spec.
+      operationId: getResources
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/offsetHeader'
+        - $ref: '#/components/parameters/sizeHeader'
+        - $ref: '#/components/parameters/sortByQuery'
+        - $ref: '#/components/parameters/orderQuery'
+      responses:
+        '200':
+          description: Paginated Resource documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentArray'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/resource/{resource_id}:
+    get:
+      tags:
+        - Resource
+      summary: Get Resource by ID
+      operationId: getResource
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/resourceIdPath'
+      responses:
+        '200':
+          description: Resource document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/path:
+    get:
+      tags:
+        - Path
+      summary: List Path documents
+      description: |
+        Retrieve a paginated array of Path documents.
+
+        Pagination uses request headers `offset` and `size`. Optional query filters and sort params apply.
+      operationId: getPaths
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/offsetHeader'
+        - $ref: '#/components/parameters/sizeHeader'
+        - $ref: '#/components/parameters/sortByQuery'
+        - $ref: '#/components/parameters/orderQuery'
+      responses:
+        '200':
+          description: Paginated Path documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentArray'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/path/{path_id}:
+    get:
+      tags:
+        - Path
+      summary: Get Path by ID
+      operationId: getPath
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/pathIdPath'
+      responses:
+        '200':
+          description: Path document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/plan:
+    get:
+      tags:
+        - Plan
+      summary: List Plan documents
+      description: |
+        Retrieve a paginated array of Plan documents.
+
+        Pagination uses request headers `offset` and `size`. Optional query filters and sort params apply.
+      operationId: getPlans
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/offsetHeader'
+        - $ref: '#/components/parameters/sizeHeader'
+        - $ref: '#/components/parameters/sortByQuery'
+        - $ref: '#/components/parameters/orderQuery'
+      responses:
+        '200':
+          description: Paginated Plan documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentArray'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/plan/{plan_id}:
+    get:
+      tags:
+        - Plan
+      summary: Get Plan by ID
+      operationId: getPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/planIdPath'
+      responses:
+        '200':
+          description: Plan document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/profile:
+    get:
+      tags:
+        - Profile
+      summary: List Profile documents
+      description: |
+        Retrieve a paginated array of Profile documents.
+
+        Pagination uses request headers `offset` and `size`. Optional query filters and sort params apply.
+      operationId: getProfiles
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/offsetHeader'
+        - $ref: '#/components/parameters/sizeHeader'
+        - $ref: '#/components/parameters/sortByQuery'
+        - $ref: '#/components/parameters/orderQuery'
+      responses:
+        '200':
+          description: Paginated Profile documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentArray'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/profile/{profile_id}:
+    get:
+      tags:
+        - Profile
+      summary: Get Profile by ID
+      operationId: getProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/profileIdPath'
+      responses:
+        '200':
+          description: Profile document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/notification:
+    get:
+      tags:
+        - Notification
+      summary: List Notification documents
+      description: |
+        Retrieve a paginated array of Notification documents.
+
+        Pagination uses request headers `offset` and `size`. Optional `sort_by` / `order` query params apply.
+      operationId: getNotifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/offsetHeader'
+        - $ref: '#/components/parameters/sizeHeader'
+        - $ref: '#/components/parameters/sortByQuery'
+        - $ref: '#/components/parameters/orderQuery'
+      responses:
+        '200':
+          description: Paginated Notification documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentArray'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/event:
+    get:
+      tags:
+        - Event
+      summary: List Event documents
+      description: |
+        Retrieve a paginated array of Event documents.
+
+        Pagination uses request headers `offset` and `size`. Optional query `profile_id` narrows scope.
+        Optional filters and `sort_by` / `order` params apply.
+      operationId: getEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/offsetHeader'
+        - $ref: '#/components/parameters/sizeHeader'
+        - $ref: '#/components/parameters/sortByQuery'
+        - $ref: '#/components/parameters/orderQuery'
+        - name: profile_id
+          in: query
+          required: false
+          description: Optional profile ID to narrow the event list
+          schema:
+            type: string
+            example: 507f1f77bcf86cd799439011
+      responses:
+        '200':
+          description: Paginated Event documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentArray'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/note:
+    get:
+      tags:
+        - Note
+      summary: List Notes for a Resource
+      description: |
+        Retrieve a paginated array of Note documents scoped to a Resource.
+
+        Requires query parameter `resource_id`. Pagination uses request headers `offset` and `size`.
+      operationId: getNotes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: resource_id
+          in: query
+          required: true
+          description: Resource ID whose notes to list
+          schema:
+            type: string
+            example: 507f1f77bcf86cd799439011
+        - $ref: '#/components/parameters/offsetHeader'
+        - $ref: '#/components/parameters/sizeHeader'
+        - $ref: '#/components/parameters/sortByQuery'
+        - $ref: '#/components/parameters/orderQuery'
+      responses:
+        '200':
+          description: Paginated Note documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentArray'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/journey/{journey_id}:
+    get:
+      tags:
+        - Journey
+      summary: Get Journey by ID
+      operationId: getJourney
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/journeyIdPath'
+      responses:
+        '200':
+          description: Journey document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/encounter:
+    get:
+      tags:
+        - Encounter
+      summary: List Encounters for a Mentee
+      description: |
+        Retrieve a paginated array of Encounter documents scoped to a Mentee.
+
+        Requires query parameter `mentee_id`. Pagination uses request headers `offset` and `size`.
+      operationId: getEncounters
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mentee_id
+          in: query
+          required: true
+          description: Mentee ID whose encounters to list
+          schema:
+            type: string
+            example: 507f1f77bcf86cd799439011
+        - $ref: '#/components/parameters/offsetHeader'
+        - $ref: '#/components/parameters/sizeHeader'
+      responses:
+        '200':
+          description: Paginated Encounter documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentArray'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/encounter/{encounter_id}:
+    get:
+      tags:
+        - Encounter
+      summary: Get Encounter by ID
+      operationId: getEncounter
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/encounterIdPath'
+      responses:
+        '200':
+          description: Encounter document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/mentee/{profile_id}:
+    get:
+      tags:
+        - Mentee
+      summary: Get Mentee by Profile ID
+      operationId: getMentee
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/profileIdPath'
+      responses:
+        '200':
+          description: Mentee document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/aggregation/{resource_id}:
+    get:
+      tags:
+        - Aggregation
+      summary: Get Aggregation for a Resource
+      operationId: getAggregation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/resourceIdPath'
+      responses:
+        '200':
+          description: Aggregation document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/external-event/{event_id}:
+    get:
+      tags:
+        - External Event
+      summary: Get External Event by ID
+      operationId: getExternalEvent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/eventIdPath'
+      responses:
+        '200':
+          description: External Event document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentObject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -170,7 +631,135 @@ components:
         JWT authentication. Tokens must be issued by your identity provider and match
         configured issuer, audience, and signing secret.
 
+  parameters:
+    offsetHeader:
+      name: offset
+      in: header
+      required: false
+      description: Zero-based index of the first document to return (default 0)
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+        example: 0
+    sizeHeader:
+      name: size
+      in: header
+      required: false
+      description: Number of documents to return (default 20, max 100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+    sortByQuery:
+      name: sort_by
+      in: query
+      required: false
+      description: Whitelisted field to sort by (service-specific)
+      schema:
+        type: string
+        example: name
+    orderQuery:
+      name: order
+      in: query
+      required: false
+      description: Sort order
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: asc
+        example: asc
+    resourceIdPath:
+      name: resource_id
+      in: path
+      required: true
+      description: Resource ID (MongoDB ObjectId)
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: 507f1f77bcf86cd799439011
+    pathIdPath:
+      name: path_id
+      in: path
+      required: true
+      description: Path ID (MongoDB ObjectId)
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: 507f1f77bcf86cd799439011
+    planIdPath:
+      name: plan_id
+      in: path
+      required: true
+      description: Plan ID (MongoDB ObjectId)
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: 507f1f77bcf86cd799439011
+    profileIdPath:
+      name: profile_id
+      in: path
+      required: true
+      description: Profile ID (MongoDB ObjectId)
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: 507f1f77bcf86cd799439011
+    journeyIdPath:
+      name: journey_id
+      in: path
+      required: true
+      description: Journey ID (MongoDB ObjectId)
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: 507f1f77bcf86cd799439011
+    encounterIdPath:
+      name: encounter_id
+      in: path
+      required: true
+      description: Encounter ID (MongoDB ObjectId)
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: 507f1f77bcf86cd799439011
+    eventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: External Event ID (MongoDB ObjectId)
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: 507f1f77bcf86cd799439011
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Document not found or not visible to caller
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
+    DocumentObject:
+      type: object
+      description: Generic MongoDB document (demo server uses shared service shapes)
+      additionalProperties: true
+    DocumentArray:
+      type: array
+      description: Paginated page of MongoDB documents
+      items:
+        $ref: '#/components/schemas/DocumentObject'
+
     ConfigResponse:
       type: object
       required:

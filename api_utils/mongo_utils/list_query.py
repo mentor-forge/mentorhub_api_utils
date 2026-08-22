@@ -15,6 +15,40 @@ DEFAULT_SIZE = 20
 MAX_SIZE = 100
 
 
+def and_match(*parts):
+    """
+    Combine match dicts with AND semantics without overwriting same-key clauses.
+
+    Non-colliding keys merge at the top level. When the same field appears in
+    multiple parts, both predicates are wrapped in ``$and``.
+    """
+    normalized = [dict(part) for part in parts if part]
+    if not normalized:
+        return {}
+    if len(normalized) == 1:
+        return normalized[0]
+
+    merged = {}
+    and_clauses = []
+
+    for part in normalized:
+        for key, value in part.items():
+            if key == "$and":
+                items = value if isinstance(value, list) else [value]
+                and_clauses.extend(items)
+            elif key in merged:
+                and_clauses.append({key: merged.pop(key)})
+                and_clauses.append({key: value})
+            else:
+                merged[key] = value
+
+    if and_clauses:
+        if merged:
+            and_clauses = [{key: value} for key, value in merged.items()] + and_clauses
+        return {"$and": and_clauses}
+    return merged
+
+
 def validate_pagination(offset, size):
     """Validate offset/size pagination parameters."""
     if offset < 0:
@@ -52,18 +86,18 @@ def parse_filter_params(args, filter_spec):
 
 
 def build_match_filter(base_match, parsed_filters, filter_spec):
-    """Merge base scope match with parsed filter clauses."""
-    match = dict(base_match or {})
+    """Merge base scope match with parsed filter clauses without clobbering keys."""
+    search_match = {}
     for param_name, value in (parsed_filters or {}).items():
         spec = filter_spec.get(param_name)
         if spec is None:
             continue
         field = spec["field"]
         if spec["type"] == "contains":
-            match[field] = {"$regex": value, "$options": "i"}
+            search_match[field] = {"$regex": value, "$options": "i"}
         elif spec["type"] == "in_list":
-            match[field] = {"$in": list(value)}
-    return match
+            search_match[field] = {"$in": list(value)}
+    return and_match(base_match or {}, search_match)
 
 
 def parse_order_params(args, order_spec):

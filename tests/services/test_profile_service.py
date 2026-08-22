@@ -1,34 +1,62 @@
 """
-Unit tests for Profile service (Mentor Dashboard, read-only).
+Unit tests for the shared Profile service.
 
-The Profile service composes its responses from dedicated domain services:
-journey progress comes from ``JourneyService`` and encounter data from
-``EncounterService``. These tests mock those collaborators and assert that
-``ProfileService`` delegates correctly while keeping the dashboard and composite
-response shapes unchanged.
+The shared class is consume-only plus the global ``create_profile`` POST:
+get-by-token, plain get-by-id, and a paginated list. Mentor Dashboard enrich
+lives on the Mentor API subclass and is not exercised here.
 """
 
+import copy
 import unittest
 from unittest.mock import patch, MagicMock
 from bson import ObjectId
 from api_utils.services.profile_service import ProfileService
-from api_utils.flask_utils.exceptions import HTTPForbidden, HTTPNotFound
+from api_utils.flask_utils.exceptions import HTTPNotFound
 
 MENTOR_ID = ObjectId("507f1f77bcf86cd799439001")
 MENTEE_1_ID = ObjectId("507f1f77bcf86cd799439011")
 MENTEE_2_ID = ObjectId("507f1f77bcf86cd799439012")
-ENCOUNTER_ID = ObjectId("507f1f77bcf86cd7994390aa")
+OTHER_PROFILE_ID = ObjectId("507f1f77bcf86cd799439099")
+CUSTOMER_ID = ObjectId("507f1f77bcf86cd7994390cc")
+NEW_PROFILE_ID = ObjectId("507f1f77bcf86cd7994390dd")
 
 
 def _make_config():
     mock_config = MagicMock()
     mock_config.PROFILE_COLLECTION_NAME = "Profile"
-    mock_config.JOURNEY_COLLECTION_NAME = "Journey"
-    mock_config.ENCOUNTER_COLLECTION_NAME = "Encounter"
-    mock_config.RESOURCE_COLLECTION_NAME = "Resource"
     mock_config.ROLE_MENTOR = "mentor"
     mock_config.ROLE_ADMIN = "admin"
     return mock_config
+
+
+def _mentor_token():
+    return {
+        "user_id": "mike",
+        "roles": ["mentor"],
+        "profile_id": str(MENTOR_ID),
+        "mentor_id": str(MENTOR_ID),
+    }
+
+
+def _admin_token():
+    return {"user_id": "admin", "roles": ["admin"]}
+
+
+def _capture_create(mock_mongo, new_id):
+    """Snapshot the document handed to MongoIO before the service stamps _id.
+
+    The service mutates the same dict it passed in, so call_args would
+    otherwise show the post-insert state.
+    """
+    captured = {}
+
+    def create_document(collection_name, document):
+        captured["collection_name"] = collection_name
+        captured["document"] = copy.deepcopy(document)
+        return str(new_id)
+
+    mock_mongo.create_document.side_effect = create_document
+    return captured
 
 
 class TestProfileService(unittest.TestCase):
@@ -36,7 +64,7 @@ class TestProfileService(unittest.TestCase):
 
     def setUp(self):
         """Set up the test fixture."""
-        self.mock_token = {"user_id": "mike", "roles": ["mentor"]}
+        self.mock_token = _mentor_token()
         self.mock_breadcrumb = {
             "at_time": "2024-01-01T00:00:00Z",
             "by_user": "mike",
@@ -44,264 +72,207 @@ class TestProfileService(unittest.TestCase):
             "correlation_id": "test-correlation-id",
         }
 
-    @patch("api_utils.services.encounter_service.EncounterService.get_recent_encounter")
-    @patch("api_utils.services.journey_service.JourneyService.get_journey_progress")
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profiles_builds_dashboard(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_journey_progress,
-        mock_get_recent_encounter,
-    ):
-        """Dashboard combines profile info with delegated journey/encounter data."""
-        mock_get_config.return_value = _make_config()
-
-        def fake_get_documents(collection_name, match=None, project=None, sort_by=None):
-            if collection_name == "Profile" and match == {"name": "mike"}:
-                return [{"_id": MENTOR_ID, "name": "mike"}]
-            if collection_name == "Profile" and match == {"mentor_id": MENTOR_ID}:
-                return [
-                    {"_id": MENTEE_1_ID, "name": "daniel", "description": "mentee one"},
-                    {"_id": MENTEE_2_ID, "name": "lucky", "description": "mentee two"},
-                ]
-            return []
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.side_effect = fake_get_documents
-        mock_get_mongo.return_value = mock_mongo
-
-        def fake_journey_progress(profile_id, token, breadcrumb):
-            if profile_id == MENTEE_1_ID:
-                return {"library": 3, "now": 1, "next": 3}
-            return {"library": 0, "now": 0, "next": 0}
-
-        def fake_recent_encounter(mentee_id, token, breadcrumb):
-            if mentee_id == MENTEE_1_ID:
-                return {
-                    "_id": ENCOUNTER_ID,
-                    "date": "2025-02-01T00:00:00Z",
-                    "tldr": "great session",
-                    "summary": "covered async patterns",
-                }
-            return None
-
-        mock_get_journey_progress.side_effect = fake_journey_progress
-        mock_get_recent_encounter.side_effect = fake_recent_encounter
-
-        result = ProfileService.get_profiles(self.mock_token, self.mock_breadcrumb)
-
-        self.assertIsInstance(result, list)
-        self.assertEqual(len(result), 2)
-
-        first = result[0]
-        self.assertEqual(
-            set(first.keys()),
-            {
-                "_id",
-                "name",
-                "description",
-                "progress",
-                "last_encounter",
-            },
-        )
-        self.assertEqual(first["_id"], MENTEE_1_ID)
-        self.assertEqual(first["name"], "daniel")
-        self.assertEqual(first["description"], "mentee one")
-        self.assertEqual(first["progress"], {"library": 3, "now": 1, "next": 3})
-        self.assertEqual(first["last_encounter"]["_id"], ENCOUNTER_ID)
-        self.assertEqual(first["last_encounter"]["summary"], "covered async patterns")
-
-        second = result[1]
-        self.assertEqual(second["name"], "lucky")
-        self.assertEqual(second["progress"], {"library": 0, "now": 0, "next": 0})
-        self.assertIsNone(second["last_encounter"])
-
-        # Journey/encounter data is fetched via the dedicated services, once per
-        # mentee, with the mentee Profile id and the caller's token/breadcrumb.
-        mock_get_journey_progress.assert_any_call(
-            MENTEE_1_ID, self.mock_token, self.mock_breadcrumb
-        )
-        mock_get_journey_progress.assert_any_call(
-            MENTEE_2_ID, self.mock_token, self.mock_breadcrumb
-        )
-        self.assertEqual(mock_get_journey_progress.call_count, 2)
-        mock_get_recent_encounter.assert_any_call(
-            MENTEE_1_ID, self.mock_token, self.mock_breadcrumb
-        )
-        mock_get_recent_encounter.assert_any_call(
-            MENTEE_2_ID, self.mock_token, self.mock_breadcrumb
-        )
-        self.assertEqual(mock_get_recent_encounter.call_count, 2)
-
-    @patch("api_utils.services.profile_service.Config.get_instance")
-    @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profiles_forbidden_without_mentor_role(
+    def test_get_profile_by_token_returns_caller_profile(
         self, mock_get_mongo, mock_get_config
     ):
-        """Callers lacking the mentor role are denied before any DB access."""
+        """The caller's Profile is the one whose name matches token user_id."""
         mock_get_config.return_value = _make_config()
+
+        profile_doc = {"_id": MENTOR_ID, "name": "mike"}
         mock_mongo = MagicMock()
+        mock_mongo.get_documents.return_value = [profile_doc]
         mock_get_mongo.return_value = mock_mongo
 
-        non_mentor_token = {"user_id": "carol", "roles": ["coordinator"]}
-        with self.assertRaises(HTTPForbidden):
-            ProfileService.get_profiles(non_mentor_token, self.mock_breadcrumb)
+        result = ProfileService.get_profile_by_token(
+            self.mock_token, self.mock_breadcrumb
+        )
 
-        # RBAC must short-circuit before touching the database
-        mock_mongo.get_documents.assert_not_called()
+        self.assertEqual(result, profile_doc)
+        mock_mongo.get_documents.assert_called_once_with(
+            "Profile", match={"name": "mike"}
+        )
 
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profiles_empty_when_no_mentor_profile(
+    def test_get_profile_by_token_returns_none_when_missing(
         self, mock_get_mongo, mock_get_config
     ):
-        """Return an empty list when the caller has no Profile."""
+        """A token with no matching Profile resolves to None, not an error."""
         mock_get_config.return_value = _make_config()
 
         mock_mongo = MagicMock()
         mock_mongo.get_documents.return_value = []
         mock_get_mongo.return_value = mock_mongo
 
-        result = ProfileService.get_profiles(self.mock_token, self.mock_breadcrumb)
-
-        self.assertEqual(result, [])
-        # Only the mentor lookup should have run
-        mock_mongo.get_documents.assert_called_once_with(
-            "Profile", match={"name": "mike"}
+        result = ProfileService.get_profile_by_token(
+            {"user_id": "nobody", "roles": []}, self.mock_breadcrumb
         )
 
-    @patch("api_utils.services.encounter_service.EncounterService.get_recent_encounter")
-    @patch("api_utils.services.journey_service.JourneyService.get_journey_progress")
+        self.assertIsNone(result)
+
+    @patch("api_utils.services.profile_service.execute_list_query")
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profiles_empty_when_no_mentees(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_journey_progress,
-        mock_get_recent_encounter,
+    def test_get_profiles_returns_paginated_documents(
+        self, mock_get_mongo, mock_get_config, mock_execute_list_query
     ):
-        """Return an empty list when the mentor has no assigned mentees."""
+        """The list is a plain page of documents sorted by name ascending."""
         mock_get_config.return_value = _make_config()
+        mock_get_mongo.return_value = MagicMock()
 
-        def fake_get_documents(collection_name, match=None, project=None, sort_by=None):
-            if match == {"name": "mike"}:
-                return [{"_id": MENTOR_ID, "name": "mike"}]
-            return []
+        documents = [
+            {"_id": MENTEE_1_ID, "name": "daniel"},
+            {"_id": MENTEE_2_ID, "name": "lucky"},
+        ]
+        mock_execute_list_query.return_value = documents
 
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.side_effect = fake_get_documents
-        mock_get_mongo.return_value = mock_mongo
+        result = ProfileService.get_profiles(
+            self.mock_token, self.mock_breadcrumb, offset=10, size=5
+        )
 
-        result = ProfileService.get_profiles(self.mock_token, self.mock_breadcrumb)
+        self.assertEqual(result, documents)
+        match = mock_execute_list_query.call_args.kwargs["match"]
+        self.assertEqual(match["status"], {"$ne": "archived"})
+        self.assertIn("$or", match)
+        mock_execute_list_query.assert_called_once()
+        call_kwargs = mock_execute_list_query.call_args[1]
+        self.assertEqual(call_kwargs["offset"], 10)
+        self.assertEqual(call_kwargs["size"], 5)
+
+    @patch("api_utils.services.profile_service.execute_list_query")
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    @patch("api_utils.services.profile_service.MongoIO.get_instance")
+    def test_get_profiles_applies_query_filters(
+        self, mock_get_mongo, mock_get_config, mock_execute_list_query
+    ):
+        """Query filters AND into the match on top of an empty base match."""
+        mock_get_config.return_value = _make_config()
+        mock_get_mongo.return_value = MagicMock()
+        mock_execute_list_query.return_value = []
+
+        ProfileService.get_profiles(
+            self.mock_token,
+            self.mock_breadcrumb,
+            filters={"name": "dan", "status": ["active", "provisioned"]},
+        )
+
+        match = mock_execute_list_query.call_args.kwargs["match"]
+        and_clauses = match["$and"]
+        status_clauses = [c["status"] for c in and_clauses if "status" in c]
+        self.assertEqual(status_clauses[0], {"$ne": "archived"})
+        self.assertEqual(status_clauses[1], {"$in": ["active", "provisioned"]})
+        name_clause = next(c for c in and_clauses if "name" in c)
+        self.assertEqual(name_clause["name"]["$regex"], "dan")
+
+    @patch("api_utils.services.profile_service.execute_list_query")
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    @patch("api_utils.services.profile_service.MongoIO.get_instance")
+    def test_get_profiles_allows_any_authenticated_role(
+        self, mock_get_mongo, mock_get_config, mock_execute_list_query
+    ):
+        """Shared reads no longer demand the mentor or admin role."""
+        mock_get_config.return_value = _make_config()
+        mock_get_mongo.return_value = MagicMock()
+        mock_execute_list_query.return_value = []
+
+        result = ProfileService.get_profiles(
+            {"user_id": "carol", "roles": ["coordinator"]}, self.mock_breadcrumb
+        )
 
         self.assertEqual(result, [])
-        # No mentees means no delegation to the journey/encounter services.
-        mock_get_journey_progress.assert_not_called()
-        mock_get_recent_encounter.assert_not_called()
 
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profiles_propagates_unexpected_errors(
-        self, mock_get_mongo, mock_get_config
-    ):
-        """Unexpected errors propagate untouched for the route wrapper to handle."""
+    def test_get_profile_returns_plain_document(self, mock_get_mongo, mock_get_config):
+        """get_profile returns the document when it is in outbound scope."""
         mock_get_config.return_value = _make_config()
 
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.side_effect = RuntimeError("Database error")
-        mock_get_mongo.return_value = mock_mongo
-
-        # The service no longer rewraps into HTTPInternalServerError; the raw
-        # error surfaces so handle_route_exceptions can produce the 500.
-        with self.assertRaises(RuntimeError):
-            ProfileService.get_profiles(self.mock_token, self.mock_breadcrumb)
-
-    @patch(
-        "api_utils.services.encounter_service.EncounterService.get_encounters_for_mentee"
-    )
-    @patch("api_utils.services.mentee_service.MenteeService.get_mentee")
-    @patch("api_utils.services.profile_service.Config.get_instance")
-    @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profile_returns_composite(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_mentee,
-        mock_get_encounters_for_mentee,
-    ):
-        """get_profile returns the {profile, mentee, encounters} composite."""
-        mock_get_config.return_value = _make_config()
-
-        profile_id = str(MENTEE_1_ID)
-        profile_doc = {"_id": MENTEE_1_ID, "name": "daniel"}
-        mentee_doc = {"_id": ObjectId("507f1f77bcf86cd7994390bb"), "notes": "n"}
-
+        profile_doc = {
+            "_id": MENTEE_1_ID,
+            "name": "daniel",
+            "mentor_id": MENTOR_ID,
+            "status": "active",
+        }
         mock_mongo = MagicMock()
         mock_mongo.get_document.return_value = profile_doc
         mock_get_mongo.return_value = mock_mongo
 
-        mock_get_mentee.return_value = mentee_doc
-
-        newer = {
-            "_id": ENCOUNTER_ID,
-            "mentee_id": MENTEE_1_ID,
-            "date": "2025-03-01T00:00:00Z",
-        }
-        older = {
-            "_id": ObjectId("507f1f77bcf86cd7994390a1"),
-            "mentee_id": MENTEE_1_ID,
-            "date": "2025-01-01T00:00:00Z",
-        }
-        # The Encounter service is responsible for filtering by mentee and
-        # ordering most-recent-first; ProfileService passes the result through.
-        mock_get_encounters_for_mentee.return_value = [newer, older]
-
         result = ProfileService.get_profile(
-            profile_id, self.mock_token, self.mock_breadcrumb
+            str(MENTEE_1_ID), self.mock_token, self.mock_breadcrumb
         )
 
-        # Composite shape matches the ProfileDetail contract exactly.
-        self.assertEqual(set(result.keys()), {"profile", "mentee", "encounters"})
-        self.assertEqual(result["profile"], profile_doc)
-        self.assertEqual(result["mentee"], mentee_doc)
-        self.assertEqual(
-            [e["_id"] for e in result["encounters"]], [ENCOUNTER_ID, older["_id"]]
-        )
-
-        # The Profile is read directly; cross-collection data is not.
-        mock_mongo.get_document.assert_called_once_with("Profile", profile_id)
+        self.assertEqual(result, profile_doc)
+        mock_mongo.get_document.assert_called_once_with("Profile", str(MENTEE_1_ID))
         mock_mongo.get_documents.assert_not_called()
-
-        # Related domains are fetched service-to-service.
-        mock_get_mentee.assert_called_once_with(
-            profile_id, self.mock_token, self.mock_breadcrumb
-        )
-        mock_get_encounters_for_mentee.assert_called_once_with(
-            profile_id, self.mock_token, self.mock_breadcrumb
-        )
 
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profile_forbidden_without_mentor_role(
-        self, mock_get_mongo, mock_get_config
-    ):
-        """Single-profile reads also require the mentor role."""
+    def test_get_profile_hides_other_profiles(self, mock_get_mongo, mock_get_config):
+        """get_profile of someone else's profile returns 404."""
         mock_get_config.return_value = _make_config()
+
+        profile_doc = {
+            "_id": OTHER_PROFILE_ID,
+            "name": "stranger",
+            "status": "active",
+        }
         mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = profile_doc
         mock_get_mongo.return_value = mock_mongo
 
-        non_mentor_token = {"user_id": "carol", "roles": []}
-        with self.assertRaises(HTTPForbidden):
-            ProfileService.get_profile("123", non_mentor_token, self.mock_breadcrumb)
-        mock_mongo.get_document.assert_not_called()
+        with self.assertRaises(HTTPNotFound):
+            ProfileService.get_profile(
+                str(OTHER_PROFILE_ID), self.mock_token, self.mock_breadcrumb
+            )
+
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    @patch("api_utils.services.profile_service.MongoIO.get_instance")
+    def test_get_profile_admin_sees_archived(self, mock_get_mongo, mock_get_config):
+        """Admin callers may fetch archived profiles."""
+        mock_get_config.return_value = _make_config()
+
+        profile_doc = {
+            "_id": OTHER_PROFILE_ID,
+            "name": "stranger",
+            "status": "archived",
+        }
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = profile_doc
+        mock_get_mongo.return_value = mock_mongo
+
+        result = ProfileService.get_profile(
+            str(OTHER_PROFILE_ID), _admin_token(), self.mock_breadcrumb
+        )
+
+        self.assertEqual(result["status"], "archived")
+
+    @patch("api_utils.services.profile_service.execute_list_query")
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    def test_get_profiles_status_archived_search_still_filters(
+        self, mock_get_config, mock_execute_list_query
+    ):
+        """Non-admin list search for archived still applies outbound archived filter."""
+        mock_get_config.return_value = _make_config()
+        mock_execute_list_query.return_value = []
+
+        ProfileService.get_profiles(
+            self.mock_token,
+            self.mock_breadcrumb,
+            filters={"status": ["archived"]},
+        )
+
+        match = mock_execute_list_query.call_args.kwargs["match"]
+        and_clauses = match["$and"]
+        status_clauses = [c["status"] for c in and_clauses if "status" in c]
+        self.assertEqual(status_clauses[0], {"$ne": "archived"})
+        self.assertEqual(status_clauses[1], {"$in": ["archived"]})
 
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
     def test_get_profile_not_found(self, mock_get_mongo, mock_get_config):
-        """Test get_profile raises HTTPNotFound when document not found."""
+        """A missing Profile raises HTTPNotFound naming the requested id."""
         mock_get_config.return_value = _make_config()
 
         mock_mongo = MagicMock()
@@ -328,161 +299,87 @@ class TestProfileService(unittest.TestCase):
             ProfileService.get_profile("123", self.mock_token, self.mock_breadcrumb)
 
     @patch("api_utils.services.profile_service.Config.get_instance")
-    def test_check_permission_allows_mentor(self, mock_get_config):
-        """A token with the mentor role passes the permission check."""
-        mock_get_config.return_value = _make_config()
-        ProfileService._check_permission(
-            {"user_id": "mike", "roles": ["mentor"]}, "read"
-        )
-
-    @patch("api_utils.services.profile_service.Config.get_instance")
-    def test_check_permission_allows_admin(self, mock_get_config):
-        """A token with the admin role passes the permission check."""
-        mock_get_config.return_value = _make_config()
-        ProfileService._check_permission({"user_id": "ada", "roles": ["admin"]}, "read")
-
-    @patch("api_utils.services.profile_service.Config.get_instance")
-    def test_check_permission_denies_other_roles(self, mock_get_config):
-        """A token without the mentor or admin role raises HTTPForbidden."""
-        mock_get_config.return_value = _make_config()
-        with self.assertRaises(HTTPForbidden):
-            ProfileService._check_permission(
-                {"user_id": "carol", "roles": ["coordinator"]}, "read"
-            )
-
-    @patch(
-        "api_utils.services.encounter_service.EncounterService.get_encounters_for_mentee"
-    )
-    @patch("api_utils.services.journey_service.JourneyService.get_journey_progress")
-    @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profile_properties_success(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_journey_progress,
-        mock_get_encounters_for_mentee,
+    def test_create_profile_stamps_breadcrumbs_and_encodes_ids(
+        self, mock_get_mongo, mock_get_config
     ):
-        """Properties hub aggregates journey resources and mentor history."""
+        """Create encodes id fields, stamps both breadcrumbs, and returns _id."""
         mock_get_config.return_value = _make_config()
-        resource_id = ObjectId("507f1f77bcf86cd7994390bb")
-
-        def fake_get_document(collection_name, doc_id):
-            if collection_name == "Profile" and doc_id == str(MENTEE_1_ID):
-                return {"_id": MENTEE_1_ID, "name": "daniel", "status": "active"}
-            if collection_name == "Resource" and doc_id == str(resource_id):
-                return {
-                    "_id": resource_id,
-                    "name": "async-patterns",
-                    "url": "https://example.com/async",
-                }
-            if collection_name == "Profile" and doc_id == str(MENTOR_ID):
-                return {"_id": MENTOR_ID, "name": "mike"}
-            return None
-
-        def fake_get_documents(collection_name, match=None, project=None, sort_by=None):
-            if collection_name == "Journey":
-                return [
-                    {
-                        "status": "active",
-                        "library": [
-                            {
-                                "resource_id": resource_id,
-                                "completed": "2025-02-01T00:00:00Z",
-                            }
-                        ],
-                        "now": [],
-                        "next": [],
-                    }
-                ]
-            return []
 
         mock_mongo = MagicMock()
-        mock_mongo.get_document.side_effect = fake_get_document
-        mock_mongo.get_documents.side_effect = fake_get_documents
-        mock_get_mongo.return_value = mock_mongo
-        mock_get_journey_progress.return_value = {
-            "library": 1,
-            "now": 0,
-            "next": 0,
-        }
-        mock_get_encounters_for_mentee.return_value = [
-            {
-                "mentor_id": MENTOR_ID,
-                "date": "2025-02-01T00:00:00Z",
-            }
-        ]
-
-        result = ProfileService.get_profile_properties(
-            str(MENTEE_1_ID), self.mock_token, self.mock_breadcrumb
-        )
-
-        self.assertEqual(result["profile"]["name"], "daniel")
-        self.assertEqual(result["status_summary"]["library_count"], 1)
-        self.assertEqual(len(result["sites_and_links"]), 1)
-        self.assertEqual(
-            result["sites_and_links"][0]["url"], "https://example.com/async"
-        )
-        self.assertEqual(len(result["celebrations"]), 1)
-        self.assertEqual(result["mentor_history"][0]["mentor_name"], "mike")
-
-    @patch("api_utils.services.profile_service.Config.get_instance")
-    @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profile_properties_not_found(self, mock_get_mongo, mock_get_config):
-        """Properties hub returns 404 when the mentee profile does not exist."""
-        mock_get_config.return_value = _make_config()
-        mock_mongo = MagicMock()
-        mock_mongo.get_document.return_value = None
+        captured = _capture_create(mock_mongo, NEW_PROFILE_ID)
         mock_get_mongo.return_value = mock_mongo
 
-        with self.assertRaises(HTTPNotFound):
-            ProfileService.get_profile_properties(
-                "999", self.mock_token, self.mock_breadcrumb
-            )
-
-    @patch(
-        "api_utils.services.encounter_service.EncounterService.get_encounters_for_mentee"
-    )
-    @patch("api_utils.services.journey_service.JourneyService.get_journey_progress")
-    @patch("api_utils.services.profile_service.Config.get_instance")
-    @patch("api_utils.services.profile_service.MongoIO.get_instance")
-    def test_get_profile_properties_encodes_string_profile_id(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_journey_progress,
-        mock_get_encounters_for_mentee,
-    ):
-        """The active-Journey lookup encodes the string profile_id to ObjectId.
-
-        Journey.profile_id is a BSON ObjectId and MongoIO.get_documents does not
-        coerce match values, so a raw string profile_id would silently return no
-        journey. This asserts the match id is encoded.
-        """
-        mock_get_config.return_value = _make_config()
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_document.return_value = {
-            "_id": MENTEE_1_ID,
+        data = {
             "name": "daniel",
+            "full_name": "Daniel Mentee",
+            "customer_id": str(CUSTOMER_ID),
+            "mentor_id": str(MENTOR_ID),
             "status": "active",
         }
-        # No active journey; we only care about how the match was built.
-        mock_mongo.get_documents.return_value = []
+
+        result = ProfileService.create_profile(
+            data, self.mock_token, self.mock_breadcrumb
+        )
+
+        # customer_id/mentor_id are objectId in the live BSON schema.
+        stored = captured["document"]
+        self.assertEqual(captured["collection_name"], "Profile")
+        self.assertEqual(stored["customer_id"], CUSTOMER_ID)
+        self.assertEqual(stored["mentor_id"], MENTOR_ID)
+        self.assertEqual(stored["created"], self.mock_breadcrumb)
+        self.assertEqual(stored["saved"], self.mock_breadcrumb)
+
+        self.assertEqual(result["_id"], NEW_PROFILE_ID)
+        self.assertEqual(result["name"], "daniel")
+
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    @patch("api_utils.services.profile_service.MongoIO.get_instance")
+    def test_create_profile_strips_system_managed_fields(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """Client-supplied _id, created, and saved are discarded."""
+        mock_get_config.return_value = _make_config()
+
+        mock_mongo = MagicMock()
+        captured = _capture_create(mock_mongo, NEW_PROFILE_ID)
         mock_get_mongo.return_value = mock_mongo
 
-        mock_get_journey_progress.return_value = {"library": 0, "now": 0, "next": 0}
-        mock_get_encounters_for_mentee.return_value = []
+        data = {
+            "_id": str(MENTEE_1_ID),
+            "name": "daniel",
+            "created": {"by_user": "spoofed"},
+            "saved": {"by_user": "spoofed"},
+        }
 
-        ProfileService.get_profile_properties(
-            str(MENTEE_1_ID), self.mock_token, self.mock_breadcrumb
-        )
+        ProfileService.create_profile(data, self.mock_token, self.mock_breadcrumb)
 
-        # The single get_documents call (the active-Journey lookup) must match on
-        # the encoded ObjectId, not the raw string.
-        mock_mongo.get_documents.assert_called_once_with(
-            "Journey", match={"profile_id": MENTEE_1_ID, "status": "active"}
+        stored = captured["document"]
+        self.assertNotIn("_id", stored)
+        self.assertEqual(stored["created"], self.mock_breadcrumb)
+        self.assertEqual(stored["saved"], self.mock_breadcrumb)
+
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    def test_check_permission_is_authentication_only(self, mock_get_config):
+        """Reads and creates on the shared class require only a valid token."""
+        mock_get_config.return_value = _make_config()
+        ProfileService._check_permission(
+            {"user_id": "carol", "roles": ["coordinator"]}, "read"
         )
+        ProfileService._check_permission({"user_id": "carol", "roles": []}, "create")
+
+    def test_dashboard_enrich_is_not_on_the_shared_class(self):
+        """Mentor Dashboard enrich moved to the Mentor API subclass."""
+        for name in (
+            "get_profile_properties",
+            "_resource_ref",
+            "_load_resource",
+            "_mentor_history",
+        ):
+            self.assertFalse(
+                hasattr(ProfileService, name),
+                f"{name} should no longer exist on the shared ProfileService",
+            )
 
 
 if __name__ == "__main__":

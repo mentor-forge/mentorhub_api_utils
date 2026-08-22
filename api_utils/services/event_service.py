@@ -11,6 +11,7 @@ from api_utils.mongo_utils import encode_document
 from api_utils.mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
+    and_match,
     build_match_filter,
     build_sort_by,
     execute_list_query,
@@ -20,11 +21,13 @@ from api_utils.flask_utils.exceptions import (
     HTTPForbidden,
     HTTPInternalServerError,
 )
+from api_utils.services.rbac import EMPTY_SCOPE_MATCH, build_outbound_match
 import logging
 
 logger = logging.getLogger(__name__)
 
 ID_PROPERTIES = ["_id", "profile_id", "resource_id", "journey_id"]
+EVENT_ID_PROPERTIES = ["profile_id"]
 DATE_PROPERTIES = []
 
 EVENT_LIST_FILTERS = {
@@ -45,13 +48,33 @@ class EventService:
     Service class for Event domain operations.
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """Any authenticated user may create and read events."""
         pass
 
-    @staticmethod
-    def create_event(data, token, breadcrumb):
+    @classmethod
+    def _event_identity_or(cls, token):
+        profile_id = token.get("profile_id")
+        if not profile_id:
+            return EMPTY_SCOPE_MATCH
+
+        or_clauses = []
+        context_clause = {"context": {"profile_id": profile_id}}
+        encode_document(context_clause, EVENT_ID_PROPERTIES, DATE_PROPERTIES)
+        or_clauses.append(context_clause)
+
+        top_clause = {"profile_id": profile_id}
+        encode_document(top_clause, EVENT_ID_PROPERTIES, DATE_PROPERTIES)
+        or_clauses.append(top_clause)
+        return {"$or": or_clauses}
+
+    @classmethod
+    def _outbound_match(cls, token):
+        return build_outbound_match(token, [cls._event_identity_or(token)])
+
+    @classmethod
+    def create_event(cls, data, token, breadcrumb):
         """
         Create a new event document.
 
@@ -64,7 +87,7 @@ class EventService:
             dict: The created event document including _id
         """
         try:
-            EventService._check_permission(token, "create")
+            cls._check_permission(token, "create")
 
             if "_id" in data:
                 del data["_id"]
@@ -84,19 +107,6 @@ class EventService:
                 data["_id"] = ObjectId(event_id)
             logger.info(f"Created event {event_id} for user {token.get('user_id')}")
 
-            if data.get("type") == config.EVENT_TYPE_LINK:
-                resource_id = token.get("resource_id")
-                if resource_id:
-                    from api_utils.services.aggregation_service import (
-                        AggregationService,
-                    )
-
-                    AggregationService.add_hit(resource_id, token, breadcrumb)
-                else:
-                    logger.warning(
-                        "link event created without resource_id in token; skipping add_hit"
-                    )
-
             return data
         except HTTPForbidden:
             raise
@@ -105,8 +115,9 @@ class EventService:
             logger.error(f"Error creating event: {error_msg}")
             raise HTTPInternalServerError(f"Failed to create event: {error_msg}")
 
-    @staticmethod
+    @classmethod
     def get_events(
+        cls,
         token,
         breadcrumb,
         offset=DEFAULT_OFFSET,
@@ -126,23 +137,24 @@ class EventService:
             size: Number of documents to return
             filters: Parsed filter dict (optional type in_list)
             sort_by: PyMongo sort list; default created.at_time desc
-            profile_id: Optional scope on context.profile_id
+            profile_id: Optional scope on context.profile_id (narrows outbound)
 
         Returns:
             list: Event documents
         """
         try:
-            EventService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             config = Config.get_instance()
-            base_match = {}
+            base_match = cls._outbound_match(token)
             if profile_id is not None:
                 from bson.errors import InvalidId
 
                 try:
-                    base_match["context.profile_id"] = ObjectId(profile_id)
+                    narrow = {"context.profile_id": ObjectId(profile_id)}
                 except (InvalidId, TypeError):
                     raise HTTPBadRequest("profile_id must be a valid MongoDB ObjectId")
+                base_match = and_match(base_match, narrow)
 
             match = build_match_filter(base_match, filters or {}, EVENT_LIST_FILTERS)
             if sort_by is None:
