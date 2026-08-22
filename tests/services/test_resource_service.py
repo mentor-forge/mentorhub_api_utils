@@ -86,8 +86,16 @@ class TestResourceService(unittest.TestCase):
         )
 
         call_kwargs = mock_execute_list.call_args[1]
-        self.assertEqual(call_kwargs["match"]["name"]["$regex"], "alpha")
-        self.assertEqual(call_kwargs["match"]["status"]["$in"], ["active"])
+        self.assertEqual(
+            call_kwargs["match"],
+            {
+                "$and": [
+                    {"name": {"$regex": "alpha", "$options": "i"}},
+                    {"status": {"$ne": "archived"}},
+                    {"status": {"$in": ["active"]}},
+                ]
+            },
+        )
 
     @patch("api_utils.services.resource_service.execute_list_query")
     @patch("api_utils.services.resource_service.Config.get_instance")

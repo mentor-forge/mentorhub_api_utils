@@ -32,6 +32,14 @@ from api_utils.services.path_service import PathService
 from api_utils.services.plan_service import PlanService
 from api_utils.services.profile_service import ProfileService
 from api_utils.services.resource_service import ResourceService
+from api_utils.services.rbac import (
+    EMPTY_SCOPE_MATCH,
+    and_match,
+    build_outbound_match,
+    is_admin,
+    matches_outbound,
+    require_outbound,
+)
 
 __all__ = [
     "AggregationService",
@@ -47,4 +55,10 @@ __all__ = [
     "ProfileService",
     "ResourceService",
     "TEMPLATE_JOURNEY_ID",
+    "EMPTY_SCOPE_MATCH",
+    "and_match",
+    "build_outbound_match",
+    "is_admin",
+    "matches_outbound",
+    "require_outbound",
 ]
