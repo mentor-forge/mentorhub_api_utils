@@ -1,6 +1,6 @@
 # R074 – Audit downstream APIs and remove infinite scroll from api_utils
 
-**Status**: Blocked  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `none`  
 **Description**: Confirm no domain API still imports `execute_infinite_scroll_query` or exposes cursor list contracts (`after_id`, `has_more`, `next_cursor`). Record ISSUE artifacts for any stragglers, then delete the deprecated `infinite_scroll` module and its public export from api_utils.
@@ -156,3 +156,23 @@ only when `execute_infinite_scroll_query` is zero across all domain APIs.
 No commit. No domain-API writes. No version bump.
 
 Orchestrator confirmation: audit gate failed as designed. Status remains Blocked; filename renamed `PENDING.*` → `BLOCKED.*`. ISSUE artifacts committed with this task.
+
+### Removal phase (developer override, 2026-08-22)
+
+Developer confirmed Customer and Discovery APIs will migrate off infinite
+scroll in the same `api-utils` pin bump. Removal proceeded despite remaining
+downstream imports.
+
+- Deleted `api_utils/mongo_utils/infinite_scroll.py` and
+  `tests/mongo_utils/test_infinite_scroll.py`
+- Removed `execute_infinite_scroll_query` from `api_utils/mongo_utils/__init__.py`
+- README: dropped deprecated infinite-scroll note and project-structure mention;
+  pin example `api-utils==0.7.1`
+- `pyproject.toml` patch bump `0.7.0` → `0.7.1`
+- ISSUE artifacts updated to pin `==0.7.1` (symbol is gone; migrate in the same bump)
+- `MongoIO.get_collection` retained
+
+Commands:
+- `pipenv run test` — **273 passed**, 24 deselected (13 infinite-scroll tests removed)
+- `pipenv run black --check api_utils/mongo_utils/__init__.py` — clean
+- `pipenv run build` — `api_utils-0.7.1.tar.gz` and `api_utils-0.7.1-py3-none-any.whl`

@@ -4,9 +4,9 @@
 > in **`mentorhub_discovery_api`**. Not part of the current `PENDING.*`
 > orchestration chain in `mentorhub_api_utils` and must not be executed from
 > that folder.
-> **Blocked on**: `mentorhub_api_utils` list-query utilities shipped
-> (`api-utils>=0.4.0`; pin **`==0.7.0`** — current published). R074 cannot
-> delete `execute_infinite_scroll_query` until this repo has zero imports.
+> **Blocked on**: `mentorhub_api_utils` **0.7.1** (this PR) removes
+> `execute_infinite_scroll_query`. Migrate list endpoints in the **same**
+> pin bump — 0.7.1 will not import.
 
 ## Summary
 
@@ -17,10 +17,10 @@ deprecated cursor contract. Two local list services import
 Matching list routes still read `after_id` / `limit` query params.
 
 `Pipfile` currently pins `api-utils==0.5.2` (already has `list_query`). Bump
-to `0.7.0`, switch Customer and Profile lists to the Standardized Get List
+to **0.7.1**, switch Customer and Profile lists to the Standardized Get List
 pattern used by `mentorhub_mentee_api` (`parse_list_request` +
-`execute_list_query`), then delete all infinite-scroll imports so api_utils
-can remove the module.
+`execute_list_query`), and delete all infinite-scroll imports in the same
+change.
 
 ## Audit hits (R074, 2026-08-22)
 
@@ -58,12 +58,12 @@ list operations). Unit tests
 
 ### Dependency bump
 
-- Pin `api-utils` to **`==0.7.0`** in `Pipfile` / `Pipfile.lock`.
+- Pin `api-utils` to **`==0.7.1`** in `Pipfile` / `Pipfile.lock`.
 - `pipenv run install` (CodeArtifact auth; run `mh` first if needed).
 - Do **not** use bare `pipenv install`.
 
-`0.7.0` still exports `execute_infinite_scroll_query` (deprecated). After this
-issue ships, api_utils R074 can delete the symbol in a patch (`0.7.1`).
+`0.7.1` **does not** export `execute_infinite_scroll_query`. The pin bump and
+list-contract migration must land together.
 
 ### Replace list contract (Customer + Profile lists)
 
@@ -132,11 +132,11 @@ contains is the existing filter; keep current allowed sort fields
 rg 'execute_infinite_scroll_query|after_id|has_more|next_cursor' --glob '*.py' --glob 'docs/openapi.yaml'
 ```
 
-Zero hits required before R074 can proceed.
+Zero hits required after the `api-utils==0.7.1` bump.
 
 ## Acceptance
 
-- `Pipfile` pins `api-utils==0.7.0`.
+- `Pipfile` pins `api-utils==0.7.1`.
 - No `execute_infinite_scroll_query` import remains.
 - Customer and Profile list endpoints use offset/size headers and return a
   plain JSON array.

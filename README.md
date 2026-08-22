@@ -61,7 +61,7 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.7.0`). Releasing is two steps:
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.7.1`). Releasing is two steps:
 - Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
 - After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
 
@@ -72,7 +72,7 @@ Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.7.0`). Releasing 
 - `api_utils/` - Main package containing:
   - `config/` - Configuration singleton with support for file, environment, and default values
   - `flask_utils/` - Flask-specific utilities (`MongoJSONEncoder` outbound id/date → string, token, breadcrumb)
-  - `mongo_utils/` - MongoDB utilities (MongoIO singleton, `encode_document` inbound string → ObjectId/datetime, list query, legacy infinite scroll)
+  - `mongo_utils/` - MongoDB utilities (MongoIO singleton, `encode_document` inbound string → ObjectId/datetime, list query)
   - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation, Plan, Mentee, Encounter, Profile, ExternalEvent, Notification)
   - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer)
 
@@ -154,8 +154,6 @@ offset, size, filters, sort_by = parse_list_request(
 )
 items = ResourceService.get_resources(token, breadcrumb, offset, size, filters, sort_by)
 ```
-
-Legacy `execute_infinite_scroll_query` is **deprecated** — migrate domain APIs to `list_query.execute_list_query`.
 
 ## Domain APIs vs. this library
 
