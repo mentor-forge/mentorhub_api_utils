@@ -1,6 +1,6 @@
 # R074 – Audit downstream APIs and remove infinite scroll from api_utils
 
-**Status**: Pending  
+**Status**: Blocked  
 **Type**: Feature  
 **Depends On**: `none`  
 **Description**: Confirm no domain API still imports `execute_infinite_scroll_query` or exposes cursor list contracts (`after_id`, `has_more`, `next_cursor`). Record ISSUE artifacts for any stragglers, then delete the deprecated `infinite_scroll` module and its public export from api_utils.
@@ -103,4 +103,56 @@ The agent must not edit domain API repos from this task.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+Audit-only run (2026-08-22). Gate **failed**: two domain APIs still import
+`execute_infinite_scroll_query`. Removal of `infinite_scroll.py`, public
+exports, README deprecation text, and the 0.7.0 → 0.7.1 patch bump were
+**not** performed. Filename left `PENDING.*` for the orchestrator to rename
+to `BLOCKED.*`.
+
+### Audit matrix
+
+Searched each existing sibling repo's Python tree for
+`execute_infinite_scroll_query`, `infinite_scroll` imports, `after_id`,
+`has_more`, and `next_cursor`.
+
+| Repo | Exists | `execute_infinite_scroll_query` | Cursor contract (`after_id` / `has_more` / `next_cursor`) | Result |
+| --- | --- | --- | --- | --- |
+| `../mentorhub_mentee_api` | yes | none | none | **Pass** |
+| `../mentorhub_mentor_api` | yes | none | none | **Pass** |
+| `../mentorhub_customer_api` | yes | 9 services (import + call) | 9 routes + OpenAPI + unit/E2E tests | **Fail** |
+| `../mentorhub_runbook_api` | yes | none | none | **Pass** |
+| `../mentorhub_coordinator_api` | **no** | — | — | skipped |
+| `../mentorhub_admin_api` | yes | none | none | **Pass** |
+| `../mentorhub_discovery_api` | yes | 2 services (import + call) | 2 routes + OpenAPI + unit/E2E tests | **Fail** |
+
+### Fail details
+
+**`mentorhub_customer_api`** (pin `api-utils==0.2.1`):
+
+- `src/services/card_service.py` L8/L142 `get_cards`
+- `src/services/customer_service.py` L8/L82 `get_customers`
+- `src/services/dashboard_service.py` L8/L142 `get_dashboards`
+- `src/services/event_service.py` L8/L120 `get_events`
+- `src/services/journey_service.py` L8/L82 `get_journeys`
+- `src/services/note_service.py` L8/L82 `get_notes`
+- `src/services/profile_service.py` L8/L82 `get_profiles`
+- `src/services/rating_service.py` L8/L82 `get_ratings`
+- `src/services/subscription_service.py` L8/L142 `get_subscriptions`
+
+**`mentorhub_discovery_api`** (pin `api-utils==0.5.2`) — extra straggler
+beyond the planning-time expectation (customer only):
+
+- `src/services/customer_service.py` L14/L96 `get_customers`
+- `src/services/profile_service.py` L14/L96 `get_profiles`
+
+### ISSUE artifacts created
+
+- `tasks/ISSUE.mentorhub_customer_api.migrate_off_infinite_scroll.md`
+- `tasks/ISSUE.mentorhub_discovery_api.migrate_off_infinite_scroll.md`
+
+Re-run this audit after both issues ship; promote Status back to Pending
+only when `execute_infinite_scroll_query` is zero across all domain APIs.
+
+No commit. No domain-API writes. No version bump.
+
+Orchestrator confirmation: audit gate failed as designed. Status remains Blocked; filename renamed `PENDING.*` → `BLOCKED.*`. ISSUE artifacts committed with this task.
