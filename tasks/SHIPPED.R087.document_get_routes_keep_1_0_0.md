@@ -1,6 +1,6 @@
 # R087 – Document shared GET routes; keep version 1.0.0
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R086_e2e_shared_get_routes`  
 **Description**: README shows `create_*_get_routes(service_cls)` include pattern, simple `[...]` pagination, and demo-server GET prefixes. Version stays **`1.0.0`** (not tagged yet; this wave lands on the same PR). Point downstream ISSUE files at the factories.
@@ -89,4 +89,10 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+**Approach**: Documented shared GET route factories in README (include pattern, array list body, offset/size pagination, no cursor/X-Pagination-*, demo server prefixes with shared service classes). Appended **Shared GET routes** sections to four downstream ISSUE artifacts pointing each API at the appropriate `create_*_get_routes` factories. Left `pyproject.toml` at `1.0.0` (unchanged).
+
+**Test results**:
+- `pipenv run test` — pass
+- `pipenv run lint` — pass
+- `pipenv run build` — `api_utils-1.0.0-...`
+- Import smoke — pass

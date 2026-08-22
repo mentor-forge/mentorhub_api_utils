@@ -51,6 +51,14 @@ admin root, hide archived). This subclass adds **inbound** writes:
 - `update_profile`: `ROLE_CUSTOMER` or admin; target Profile must be in the caller’s customer (or be the caller’s own profile). 403 if not.
 - Do not 403 on GET here.
 
+## Shared GET routes
+
+Replace Profile GET/list handlers with
+`create_profile_get_routes(ProfileService)` from `api_utils` (see
+`tasks/SHIPPED.R084.shared_get_route_factories.md`). Add Profile POST/PATCH on
+the returned blueprint. List GET body is a JSON array; pagination is
+`offset`/`size` request headers only (no cursor, no `X-Pagination-*`).
+
 ## Acceptance
 
 - Local `ProfileService` subclasses shared.

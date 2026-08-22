@@ -156,6 +156,23 @@ Shared GETs already apply **outbound** filters. Add **inbound** `_check_permissi
 
 Admin is root. Do not 403 on GET in these subclasses.
 
+## Shared GET routes
+
+Replace duplicated GET handlers with `create_*_get_routes(LocalService)` from
+`api_utils` (see `tasks/SHIPPED.R084.shared_get_route_factories.md`). Add
+control POST/PATCH on the returned blueprint. List GET body is a JSON array;
+pagination is `offset`/`size` request headers only (no cursor, no
+`X-Pagination-*`).
+
+| Route module | Factory | Notes |
+|--------------|---------|-------|
+| `resource_routes.py` | `create_resource_get_routes(ResourceService)` | POST create on same blueprint |
+| `path_routes.py` | `create_path_get_routes(PathService)` | |
+| `note_routes.py` | `create_note_get_routes(NoteService)` | list only; requires `resource_id` query |
+| `event_routes.py` | `create_event_get_routes(EventService)` | list only |
+| `journey_routes.py` | `create_journey_get_routes(JourneyService)` | by-id only — keep local `GET ""` get-or-create |
+| `aggregation_routes.py` | `create_aggregation_get_routes(AggregationService)` | by-id only (plain doc, not detail enrich) |
+
 ## Acceptance
 
 - No route imports `api_utils.services` service classes (filter/order constants may still come from api_utils).

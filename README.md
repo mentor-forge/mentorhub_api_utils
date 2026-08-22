@@ -74,7 +74,7 @@ Libraries use **pinned SemVer** in CodeArtifact (`api-utils==1.0.0`). Releasing 
   - `flask_utils/` - Flask-specific utilities (`MongoJSONEncoder` outbound id/date → string, token, breadcrumb)
   - `mongo_utils/` - MongoDB utilities (MongoIO singleton, `encode_document` inbound string → ObjectId/datetime, list query)
   - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation, Plan, Mentee, Encounter, Profile, ExternalEvent, Notification)
-  - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer)
+  - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer, shared GET routes)
 
 - `tests/` - Test suite for all components
 
@@ -136,6 +136,38 @@ class JourneyService(SharedJourneyService):
 from src.services.journey_service import JourneyService
 ```
 
+#### Shared GET route factories
+
+`api_utils.routes.shared_get_routes` provides `create_*_get_routes(service_cls)`
+factories that return a Flask Blueprint wired for shared consume GETs. Pass the
+**local service subclass** (not `api_utils.services` directly). Include the
+factory blueprint, then add control POST/PATCH routes on the same blueprint:
+
+```python
+from api_utils.routes.shared_get_routes import create_resource_get_routes
+from src.services.resource_service import ResourceService
+
+def create_resource_routes():
+    bp = create_resource_get_routes(ResourceService)
+    @bp.route("", methods=["POST"])
+    def create_resource():
+        ...
+    return bp
+```
+
+All twelve factories are exported from `api_utils` (e.g.
+`create_resource_get_routes`, `create_path_get_routes`, …). See
+`tasks/SHIPPED.R084.shared_get_route_factories.md` for the full factory table
+and URL shapes.
+
+**List GET** responses are a plain JSON **array** of documents. Pagination uses
+request headers **`offset`** and **`size`** only (defaults `0` / `20`, max
+`100`). There is **no** cursor envelope and **no** `X-Pagination-*` response
+headers in api_utils.
+
+**Get-by-id GET** returns the document JSON (or **404** when missing or hidden
+by outbound RBAC).
+
 #### Downstream planning artifacts
 
 Domain API repos should pin **`api-utils==1.0.0`** and follow the issue
@@ -195,15 +227,19 @@ at the Flask serialization boundary.**
 
 ### Standardized Get List pattern
 
-List endpoints use **offset/size request headers** (defaults `0` / `20`, max `100`), a plain JSON **array** response body, **query-parameter filters** (`contains`, `in_list`), and **order-by** query params (`sort_by`, `order`) validated per-endpoint via `order_spec`.
+List endpoints use **offset/size request headers** (defaults `0` / `20`, max
+`100`), a plain JSON **array** response body, **query-parameter filters**
+(`contains`, `in_list`), and **order-by** query params (`sort_by`, `order`)
+validated per-endpoint via `order_spec`. Domain APIs should prefer the shared
+GET route factories (see **Shared GET route factories** above) rather than
+copy-pasting list handlers.
+
+The factories call `parse_list_request` internally. When adding a custom list
+route, use the same helper:
 
 ```python
 from api_utils.flask_utils.list_request import parse_list_request
-from api_utils.services.resource_service import (
-    ResourceService,
-    RESOURCE_LIST_FILTERS,
-    RESOURCE_LIST_ORDER,
-)
+from src.services.resource_service import ResourceService, RESOURCE_LIST_FILTERS, RESOURCE_LIST_ORDER
 
 offset, size, filters, sort_by = parse_list_request(
     request, RESOURCE_LIST_FILTERS, RESOURCE_LIST_ORDER
@@ -215,7 +251,12 @@ items = ResourceService.get_resources(token, breadcrumb, offset, size, filters, 
 
 **Developer Edition:** Domain APIs and this library **validate** Bearer JWTs only; they do not mint credentials. Journey SPAs obtain tokens from the umbrella **developer sign-in page** ([`login.html`](https://github.com/mentor-forge/mentorhub/blob/main/login.html) at `http://127.0.0.1:8080/login.html`), which mints persona JWTs in the browser (`iss: dev-idp`, `aud: dev-api`, shared `JWT_SECRET`). See [API Standards](https://github.com/mentor-forge/mentorhub/blob/main/DeveloperEdition/standards/api_standards.md).
 
-The packaged **demo server** (`api_utils/server.py`) is separate from that SPA login flow—it exposes config, metrics, and docs for library testing. For local E2E against `pipenv run dev`, use the static token in `tests/e2e_auth.py` (same `JWT_SECRET` as Developer Edition compose).
+The packaged **demo server** (`api_utils/server.py`) is separate from that SPA
+login flow—it exposes config, metrics, docs, and every shared GET factory for
+library testing. The demo server mounts `create_*_get_routes` with the **shared**
+`api_utils.services` classes (no domain subclass). For local E2E against
+`pipenv run dev`, use the static token in `tests/e2e_auth.py` (same
+`JWT_SECRET` as Developer Edition compose).
 
 ## Demo Server
 
@@ -245,6 +286,10 @@ Visit **http://localhost:9092/docs/explorer.html** for an interactive API explor
 - `/docs/openapi.yaml` - OpenAPI specification
 - `/api/config` - Configuration endpoint (requires valid JWT token)
 - `/metrics` - Prometheus metrics endpoint
+- Shared GET routes (Bearer JWT; list = JSON array, `offset`/`size` headers):
+  - `/api/resource`, `/api/path`, `/api/plan`, `/api/profile`
+  - `/api/notification`, `/api/event`, `/api/note`, `/api/journey`
+  - `/api/encounter`, `/api/mentee`, `/api/aggregation`, `/api/external-event`
 
 ### Quick curl Examples
 

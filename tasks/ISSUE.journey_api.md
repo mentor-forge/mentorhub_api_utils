@@ -48,6 +48,14 @@ Outbound visibility is already applied in shared GETs (`api-utils>=1.0.0`). This
 - Do **not** 403 on GET in this subclass — hide via outbound 404 from the parent.
 - Admin remains root on inbound as well (`ROLE_ADMIN` already bypasses update in the harvest-back).
 
+## Shared GET routes
+
+By-id consume GET may come from
+`create_journey_get_routes(JourneyService)` (returns `/<journey_id>` only; no
+list). **`GET /api/journey` (`""`) stays Mentee-local** for get-or-create /
+`get_my_journey_detail`. Add control PATCH routes on the same blueprint. See
+`tasks/SHIPPED.R084.shared_get_route_factories.md`.
+
 ## Route mapping (unchanged HTTP contract)
 
 | Endpoint | Local method |

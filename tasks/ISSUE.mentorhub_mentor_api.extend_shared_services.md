@@ -301,6 +301,24 @@ def update_mentee(cls, mentee_id, data, token, breadcrumb):
         raise HTTPInternalServerError(f"Failed to update mentee {mentee_id}")
 ```
 
+## Shared GET routes
+
+Replace duplicated GET handlers with `create_*_get_routes(LocalService)` from
+`api_utils` (see `tasks/SHIPPED.R084.shared_get_route_factories.md`). Add
+control POST/PATCH on the returned blueprint. List GET body is a JSON array;
+pagination is `offset`/`size` request headers only (no cursor, no
+`X-Pagination-*`).
+
+| Route module | Factory |
+|--------------|---------|
+| `resource_routes.py` | `create_resource_get_routes(ResourceService)` |
+| `path_routes.py` | `create_path_get_routes(PathService)` |
+| `plan_routes.py` | `create_plan_get_routes(PlanService)` |
+| `profile_routes.py` | `create_profile_get_routes(ProfileService)` |
+| `mentee_routes.py` | `create_mentee_get_routes(MenteeService)` |
+| `encounter_routes.py` | `create_encounter_get_routes(EncounterService)` |
+| `event_routes.py` | `create_event_get_routes(EventService)` |
+
 ## Tests
 
 Repoint service tests at the subclass. Patch `src.services.*`. Remove tests
