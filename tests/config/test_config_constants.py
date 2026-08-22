@@ -58,6 +58,26 @@ class TestConfigConstants(unittest.TestCase):
         self.assertEqual(self.config.EVENT_TYPE_NOTE, "note")
         self.assertEqual(self.config.EVENT_TYPE_LINK, "link")
         self.assertEqual(self.config.EVENT_TYPE_ADVANCED, "advanced")
+        self.assertEqual(self.config.EVENT_TYPE_EXTERNAL_RECEIVED, "external_received")
+        self.assertEqual(
+            self.config.EVENT_TYPE_IDENTITY_PROVISIONED, "identity_provisioned"
+        )
+        self.assertEqual(
+            self.config.EVENT_TYPE_ORGANIZATION_ENRICHED, "organization_enriched"
+        )
+        self.assertEqual(
+            self.config.EVENT_TYPE_SUBSCRIPTION_CHANGED, "subscription_changed"
+        )
+        self.assertEqual(self.config.EVENT_TYPE_INVITE_CREATED, "invite_created")
+        self.assertEqual(self.config.EVENT_TYPE_INVITE_ACCEPTED, "invite_accepted")
+        self.assertEqual(
+            self.config.EVENT_TYPE_NOTIFICATION_CREATED, "notification_created"
+        )
+        self.assertEqual(
+            self.config.EVENT_TYPE_NOTIFICATION_DISMISSED, "notification_dismissed"
+        )
+        self.assertEqual(self.config.EVENT_TYPE_PAYMENT_RECORDED, "payment_recorded")
+        self.assertEqual(self.config.EVENT_TYPE_PROFILE_REDACTED, "profile_redacted")
 
     def test_constants_not_in_config_strings(self):
         constant_names = [
@@ -94,6 +114,16 @@ class TestConfigConstants(unittest.TestCase):
             "EVENT_TYPE_NOTE",
             "EVENT_TYPE_LINK",
             "EVENT_TYPE_ADVANCED",
+            "EVENT_TYPE_EXTERNAL_RECEIVED",
+            "EVENT_TYPE_IDENTITY_PROVISIONED",
+            "EVENT_TYPE_ORGANIZATION_ENRICHED",
+            "EVENT_TYPE_SUBSCRIPTION_CHANGED",
+            "EVENT_TYPE_INVITE_CREATED",
+            "EVENT_TYPE_INVITE_ACCEPTED",
+            "EVENT_TYPE_NOTIFICATION_CREATED",
+            "EVENT_TYPE_NOTIFICATION_DISMISSED",
+            "EVENT_TYPE_PAYMENT_RECORDED",
+            "EVENT_TYPE_PROFILE_REDACTED",
         ]
         for name in constant_names:
             self.assertNotIn(name, self.config.config_strings)
@@ -120,6 +150,26 @@ class TestConfigConstants(unittest.TestCase):
         self.assertEqual(self.config.NOTIFICATION_COLLECTION_NAME, "Notification")
         self.assertEqual(self.config.SETTING_COLLECTION_NAME, "Setting")
         self.assertEqual(self.config.PAYMENT_COLLECTION_NAME, "Payment")
+        self.assertEqual(self.config.EVENT_TYPE_EXTERNAL_RECEIVED, "external_received")
+        self.assertEqual(
+            self.config.EVENT_TYPE_IDENTITY_PROVISIONED, "identity_provisioned"
+        )
+        self.assertEqual(
+            self.config.EVENT_TYPE_ORGANIZATION_ENRICHED, "organization_enriched"
+        )
+        self.assertEqual(
+            self.config.EVENT_TYPE_SUBSCRIPTION_CHANGED, "subscription_changed"
+        )
+        self.assertEqual(self.config.EVENT_TYPE_INVITE_CREATED, "invite_created")
+        self.assertEqual(self.config.EVENT_TYPE_INVITE_ACCEPTED, "invite_accepted")
+        self.assertEqual(
+            self.config.EVENT_TYPE_NOTIFICATION_CREATED, "notification_created"
+        )
+        self.assertEqual(
+            self.config.EVENT_TYPE_NOTIFICATION_DISMISSED, "notification_dismissed"
+        )
+        self.assertEqual(self.config.EVENT_TYPE_PAYMENT_RECORDED, "payment_recorded")
+        self.assertEqual(self.config.EVENT_TYPE_PROFILE_REDACTED, "profile_redacted")
 
 
 if __name__ == "__main__":

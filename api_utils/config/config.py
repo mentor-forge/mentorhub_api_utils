@@ -113,6 +113,16 @@ class Config:
             self.EVENT_TYPE_NOTE = "note"
             self.EVENT_TYPE_LINK = "link"
             self.EVENT_TYPE_ADVANCED = "advanced"
+            self.EVENT_TYPE_EXTERNAL_RECEIVED = "external_received"
+            self.EVENT_TYPE_IDENTITY_PROVISIONED = "identity_provisioned"
+            self.EVENT_TYPE_ORGANIZATION_ENRICHED = "organization_enriched"
+            self.EVENT_TYPE_SUBSCRIPTION_CHANGED = "subscription_changed"
+            self.EVENT_TYPE_INVITE_CREATED = "invite_created"
+            self.EVENT_TYPE_INVITE_ACCEPTED = "invite_accepted"
+            self.EVENT_TYPE_NOTIFICATION_CREATED = "notification_created"
+            self.EVENT_TYPE_NOTIFICATION_DISMISSED = "notification_dismissed"
+            self.EVENT_TYPE_PAYMENT_RECORDED = "payment_recorded"
+            self.EVENT_TYPE_PROFILE_REDACTED = "profile_redacted"
 
             # Declare instance variables to support IDE code assist
             self.BUILT_AT = ""
