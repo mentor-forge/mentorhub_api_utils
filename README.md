@@ -61,7 +61,7 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.6.0`). Releasing is two steps:
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.7.0`). Releasing is two steps:
 - Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
 - After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
 
@@ -73,7 +73,7 @@ Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.6.0`). Releasing 
   - `config/` - Configuration singleton with support for file, environment, and default values
   - `flask_utils/` - Flask-specific utilities (`MongoJSONEncoder` outbound id/date → string, token, breadcrumb)
   - `mongo_utils/` - MongoDB utilities (MongoIO singleton, `encode_document` inbound string → ObjectId/datetime, list query, legacy infinite scroll)
-  - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation, Plan, Mentee, Encounter, Profile)
+  - `services/` - Shared domain service classes (Note, Event, Resource, Path, Journey, Aggregation, Plan, Mentee, Encounter, Profile, ExternalEvent, Notification)
   - `routes/` - Flask route blueprints with factory functions (config, metrics, explorer)
 
 - `tests/` - Test suite for all components
@@ -89,8 +89,16 @@ from api_utils import JourneyService, PathService
 ```
 
 The full shared surface is: `AggregationService`, `EncounterService`,
-`EventService`, `JourneyService`, `MenteeService`, `NoteService`, `PathService`,
-`PlanService`, `ProfileService`, and `ResourceService`.
+`EventService`, `ExternalEventService`, `JourneyService`, `MenteeService`,
+`NoteService`, `NotificationService`, `PathService`, `PlanService`,
+`ProfileService`, and `ResourceService`.
+
+Collection names, roles, and event types are inline `Config` constants
+(`PROFILE_COLLECTION_NAME`, `ROLE_ADMIN`, `EVENT_TYPE_LOGIN`, …) assigned at
+construction — not loaded from `config_strings` or overwritten by
+`initialize()`. Identity, Login, Card, Dashboard, and Subscription collection
+keys were dropped; ExternalEvent, Notification, Setting, Payment, and the
+Discovery `EVENT_TYPE_*` values are included.
 
 ### MongoDB ObjectId handling (inbound vs outbound)
 
