@@ -47,23 +47,16 @@ class TestPathService(unittest.TestCase):
         self.assertEqual(call_kwargs["offset"], 0)
         self.assertEqual(call_kwargs["size"], 20)
 
-    @patch("api_utils.services.resource_service.ResourceService.get_resources_by_ids")
     @patch("api_utils.services.path_service.Config.get_instance")
     @patch("api_utils.services.path_service.MongoIO.get_instance")
-    def test_get_path_enriches_resources(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_resources_by_ids,
-    ):
-        """Test get_path enriches nested resources with summaries."""
+    def test_get_path_returns_raw_document(self, mock_get_mongo, mock_get_config):
+        """Test get_path returns the raw path document with resource ids."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
         mock_get_config.return_value = mock_config
 
         resource_id = "507f1f77bcf86cd799439011"
-        mock_mongo = MagicMock()
-        mock_mongo.get_document.return_value = {
+        path_doc = {
             "_id": "123",
             "name": "path1",
             "modules": [
@@ -78,81 +71,19 @@ class TestPathService(unittest.TestCase):
                 }
             ],
         }
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = path_doc
         mock_get_mongo.return_value = mock_mongo
-        mock_get_resources_by_ids.return_value = [
-            {
-                "_id": resource_id,
-                "name": "resource1",
-                "description": "desc",
-            }
-        ]
 
         result = PathService.get_path("123", self.mock_token, self.mock_breadcrumb)
 
         self.assertEqual(result["_id"], "123")
-        resource = result["modules"][0]["topics"][0]["resources"][0]
-        self.assertEqual(resource["_id"], resource_id)
-        self.assertEqual(resource["name"], "resource1")
-        self.assertEqual(resource["description"], "desc")
-        mock_get_resources_by_ids.assert_called_once_with(
-            [resource_id], self.mock_token, self.mock_breadcrumb
-        )
-
-    @patch("api_utils.services.resource_service.ResourceService.get_resources_by_ids")
-    @patch("api_utils.services.path_service.Config.get_instance")
-    @patch("api_utils.services.path_service.MongoIO.get_instance")
-    def test_get_path_omits_missing_resources(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_resources_by_ids,
-    ):
-        """Test get_path omits resource IDs with no accessible summary."""
-        mock_config = MagicMock()
-        mock_config.PATH_COLLECTION_NAME = "Path"
-        mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_document.return_value = {
-            "_id": "123",
-            "name": "path1",
-            "modules": [
-                {
-                    "topics": [
-                        {
-                            "resources": [
-                                "507f1f77bcf86cd799439011",
-                                "507f1f77bcf86cd799439012",
-                            ]
-                        }
-                    ]
-                }
-            ],
-        }
-        mock_get_mongo.return_value = mock_mongo
-        mock_get_resources_by_ids.return_value = [
-            {
-                "_id": "507f1f77bcf86cd799439011",
-                "name": "resource1",
-                "description": "desc",
-            }
-        ]
-
-        result = PathService.get_path("123", self.mock_token, self.mock_breadcrumb)
-
         resources = result["modules"][0]["topics"][0]["resources"]
-        self.assertEqual(len(resources), 1)
-        self.assertEqual(resources[0]["_id"], "507f1f77bcf86cd799439011")
+        self.assertEqual(resources, [resource_id])
 
-    @patch("api_utils.services.resource_service.ResourceService.get_resources_by_ids")
     @patch("api_utils.services.path_service.Config.get_instance")
     @patch("api_utils.services.path_service.MongoIO.get_instance")
-    def test_get_path_without_modules(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_resources_by_ids,
-    ):
+    def test_get_path_without_modules(self, mock_get_mongo, mock_get_config):
         """Test get_path handles paths with no modules."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
@@ -161,14 +92,10 @@ class TestPathService(unittest.TestCase):
         mock_mongo = MagicMock()
         mock_mongo.get_document.return_value = {"_id": "123", "name": "path1"}
         mock_get_mongo.return_value = mock_mongo
-        mock_get_resources_by_ids.return_value = []
 
         result = PathService.get_path("123", self.mock_token, self.mock_breadcrumb)
 
         self.assertEqual(result["_id"], "123")
-        mock_get_resources_by_ids.assert_called_once_with(
-            [], self.mock_token, self.mock_breadcrumb
-        )
 
     @patch("api_utils.services.path_service.Config.get_instance")
     @patch("api_utils.services.path_service.MongoIO.get_instance")

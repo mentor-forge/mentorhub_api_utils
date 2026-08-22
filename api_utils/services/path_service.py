@@ -7,7 +7,6 @@ Handles RBAC checks and MongoDB operations for Path domain.
 from api_utils import MongoIO, Config
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
-    HTTPForbidden,
     HTTPNotFound,
     HTTPInternalServerError,
 )
@@ -34,65 +33,18 @@ PATH_LIST_ORDER = {
 
 class PathService:
     """
-    Service class for Path domain operations.
+    Service class for Path domain operations (read-only in shared api_utils).
 
     Handles:
-    - RBAC authorization checks (placeholder for future implementation)
+    - RBAC authorization checks (authenticated read)
     - MongoDB operations via MongoIO singleton
-    - Business logic for Path domain (read-only)
+    - Raw Path document reads (resource enrich belongs on Mentee BFF)
     """
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """
-        Check if the user has permission to perform an operation.
-
-        Args:
-            token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read')
-
-        Raises:
-            HTTPForbidden: If user doesn't have required permission
-
-        Note: This is a placeholder for future RBAC implementation.
-        For now, all operations require a valid token (authentication only).
-        """
+        """Any authenticated user may read paths."""
         pass
-
-    @classmethod
-    def _collect_resource_ids(cls, path):
-        resource_ids = []
-        seen = set()
-        for module in path.get("modules") or []:
-            for topic in module.get("topics") or []:
-                for resource_id in topic.get("resources") or []:
-                    resource_key = str(resource_id)
-                    if resource_key not in seen:
-                        seen.add(resource_key)
-                        resource_ids.append(resource_key)
-        return resource_ids
-
-    @classmethod
-    def _enrich_path_resources(cls, path, resource_summaries):
-        summary_by_id = {str(summary["_id"]): summary for summary in resource_summaries}
-        enriched = dict(path)
-        modules = []
-        for module in path.get("modules") or []:
-            enriched_module = dict(module)
-            topics = []
-            for topic in module.get("topics") or []:
-                enriched_topic = dict(topic)
-                enriched_resources = []
-                for resource_id in topic.get("resources") or []:
-                    summary = summary_by_id.get(str(resource_id))
-                    if summary is not None:
-                        enriched_resources.append(summary)
-                enriched_topic["resources"] = enriched_resources
-                topics.append(enriched_topic)
-            enriched_module["topics"] = topics
-            modules.append(enriched_module)
-        enriched["modules"] = modules
-        return enriched
 
     @classmethod
     def get_paths(
@@ -146,7 +98,7 @@ class PathService:
     @classmethod
     def get_path(cls, path_id, token, breadcrumb):
         """
-        Retrieve a specific path document by ID with enriched resource summaries.
+        Retrieve a specific path document by ID (raw document; no resource enrich).
 
         Args:
             path_id: The path ID to retrieve
@@ -154,7 +106,7 @@ class PathService:
             breadcrumb: Breadcrumb dictionary for logging
 
         Returns:
-            dict: The path document with enriched nested resources
+            dict: The path document
 
         Raises:
             HTTPNotFound: If path is not found
@@ -168,16 +120,8 @@ class PathService:
             if path is None:
                 raise HTTPNotFound(f"Path { path_id} not found")
 
-            from api_utils.services.resource_service import ResourceService
-
-            resource_ids = cls._collect_resource_ids(path)
-            resource_summaries = ResourceService.get_resources_by_ids(
-                resource_ids, token, breadcrumb
-            )
-            enriched_path = cls._enrich_path_resources(path, resource_summaries)
-
             logger.info(f"Retrieved path { path_id} for user {token.get('user_id')}")
-            return enriched_path
+            return path
         except HTTPNotFound:
             raise
         except Exception as e:

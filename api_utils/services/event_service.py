@@ -84,19 +84,6 @@ class EventService:
                 data["_id"] = ObjectId(event_id)
             logger.info(f"Created event {event_id} for user {token.get('user_id')}")
 
-            if data.get("type") == config.EVENT_TYPE_LINK:
-                resource_id = token.get("resource_id")
-                if resource_id:
-                    from api_utils.services.aggregation_service import (
-                        AggregationService,
-                    )
-
-                    AggregationService.add_hit(resource_id, token, breadcrumb)
-                else:
-                    logger.warning(
-                        "link event created without resource_id in token; skipping add_hit"
-                    )
-
             return data
         except HTTPForbidden:
             raise

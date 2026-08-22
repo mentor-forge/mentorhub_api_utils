@@ -11,8 +11,6 @@ from api_utils.flask_utils.exceptions import (
     HTTPInternalServerError,
 )
 
-CREATED_ID = "507f1f77bcf86cd799439011"
-
 
 class TestNoteService(unittest.TestCase):
     """Test cases for NoteService."""
@@ -26,50 +24,6 @@ class TestNoteService(unittest.TestCase):
             "correlation_id": "test-correlation-id",
         }
         self.resource_id = "507f1f77bcf86cd799439011"
-
-    @patch("api_utils.services.note_service.Config.get_instance")
-    @patch("api_utils.services.note_service.MongoIO.get_instance")
-    def test_create_note_success(self, mock_get_mongo, mock_get_config):
-        mock_config = MagicMock()
-        mock_config.NOTE_COLLECTION_NAME = "Note"
-        mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.create_document.return_value = CREATED_ID
-        mock_get_mongo.return_value = mock_mongo
-
-        data = {
-            "resource_id": self.resource_id,
-            "note": "Test note",
-            "status": "active",
-        }
-
-        note = NoteService.create_note(data, self.mock_token, self.mock_breadcrumb)
-
-        self.assertEqual(str(note["_id"]), CREATED_ID)
-        mock_mongo.create_document.assert_called_once()
-        created_data = mock_mongo.create_document.call_args[0][1]
-        self.assertIn("created", created_data)
-        self.assertIn("saved", created_data)
-        self.assertEqual(created_data["note"], "Test note")
-
-    @patch("api_utils.services.note_service.Config.get_instance")
-    @patch("api_utils.services.note_service.MongoIO.get_instance")
-    def test_create_note_removes_id(self, mock_get_mongo, mock_get_config):
-        mock_config = MagicMock()
-        mock_config.NOTE_COLLECTION_NAME = "Note"
-        mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.create_document.return_value = CREATED_ID
-        mock_get_mongo.return_value = mock_mongo
-
-        data = {"_id": "should-be-removed", "note": "test"}
-
-        result = NoteService.create_note(data, self.mock_token, self.mock_breadcrumb)
-
-        self.assertEqual(str(result["_id"]), CREATED_ID)
-        self.assertNotEqual(str(result["_id"]), "should-be-removed")
 
     @patch("api_utils.services.note_service.execute_list_query")
     @patch("api_utils.services.note_service.Config.get_instance")
@@ -103,22 +57,6 @@ class TestNoteService(unittest.TestCase):
         with self.assertRaises(HTTPBadRequest):
             NoteService.get_notes_for_resource(
                 "invalid", self.mock_token, self.mock_breadcrumb
-            )
-
-    @patch("api_utils.services.note_service.Config.get_instance")
-    @patch("api_utils.services.note_service.MongoIO.get_instance")
-    def test_create_note_handles_exception(self, mock_get_mongo, mock_get_config):
-        mock_config = MagicMock()
-        mock_config.NOTE_COLLECTION_NAME = "Note"
-        mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.create_document.side_effect = Exception("Database error")
-        mock_get_mongo.return_value = mock_mongo
-
-        with self.assertRaises(HTTPInternalServerError):
-            NoteService.create_note(
-                {"note": "x"}, self.mock_token, self.mock_breadcrumb
             )
 
 

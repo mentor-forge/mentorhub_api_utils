@@ -7,7 +7,6 @@ Handles RBAC checks and MongoDB operations for Note domain.
 from bson import ObjectId
 
 from api_utils import MongoIO, Config
-from api_utils.mongo_utils import encode_document
 from api_utils.mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
@@ -18,15 +17,11 @@ from api_utils.mongo_utils.list_query import (
 )
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
-    HTTPForbidden,
     HTTPInternalServerError,
 )
 import logging
 
 logger = logging.getLogger(__name__)
-
-ID_PROPERTIES = ["_id", "resource_id", "profile_id"]
-DATE_PROPERTIES = []
 
 NOTE_LIST_FILTERS = {
     "status": {"type": "in_list", "field": "status"},
@@ -40,51 +35,13 @@ NOTE_LIST_ORDER = {
 
 class NoteService:
     """
-    Service class for Note domain operations.
+    Service class for Note domain operations (read-only in shared api_utils).
     """
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """Any authenticated user may create and read notes."""
+        """Any authenticated user may read notes."""
         pass
-
-    @classmethod
-    def create_note(cls, data, token, breadcrumb):
-        """
-        Create a new note document.
-
-        Args:
-            data: Dictionary containing note data
-            token: Token dictionary with user_id and roles
-            breadcrumb: Breadcrumb dictionary for logging
-
-        Returns:
-            dict: The created note document including _id
-        """
-        try:
-            cls._check_permission(token, "create")
-
-            if "_id" in data:
-                del data["_id"]
-
-            encode_document(data, ID_PROPERTIES, DATE_PROPERTIES)
-
-            data["created"] = breadcrumb
-            data["saved"] = breadcrumb
-
-            mongo = MongoIO.get_instance()
-            config = Config.get_instance()
-            note_id = mongo.create_document(config.NOTE_COLLECTION_NAME, data)
-            if "_id" not in data:
-                data["_id"] = ObjectId(note_id)
-            logger.info(f"Created note {note_id} for user {token.get('user_id')}")
-            return data
-        except HTTPForbidden:
-            raise
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Error creating note: {error_msg}")
-            raise HTTPInternalServerError(f"Failed to create note: {error_msg}")
 
     @classmethod
     def get_notes_for_resource(

@@ -7,7 +7,6 @@ Handles RBAC checks and MongoDB operations for Plan domain.
 from api_utils import MongoIO, Config
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
-    HTTPForbidden,
     HTTPNotFound,
     HTTPInternalServerError,
 )
@@ -36,98 +35,17 @@ PLAN_LIST_ORDER = {
 
 class PlanService:
     """
-    Service class for Plan domain operations.
+    Service class for Plan domain operations (read-only in shared api_utils).
 
     Handles:
-    - RBAC authorization checks (placeholder for future implementation)
+    - RBAC authorization checks (mentor-or-admin read)
     - MongoDB operations via MongoIO singleton
-    - Business logic for Plan domain
     """
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """
-        Check if the user has permission to perform an operation.
-
-        Args:
-            token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read', 'create', 'update')
-
-        Raises:
-            HTTPForbidden: If user doesn't have required permission
-
-        Note: This is a placeholder for future RBAC implementation.
-        For now, all operations require a valid token (authentication only).
-
-        Example RBAC implementation:
-            if operation == 'update':
-                # Update requires admin role
-                if 'admin' not in token.get('roles', []):
-                    raise HTTPForbidden("Admin role required to update plan documents")
-            elif operation == 'create':
-                # Create requires staff or admin role
-                if not any(role in token.get('roles', []) for role in ['staff', 'admin']):
-                    raise HTTPForbidden("Staff or admin role required to create plan documents")
-            elif operation == 'read':
-                # Read requires any authenticated user (no additional check needed)
-                pass
-        """
+        """Authenticated read; mentor-or-admin enforced by controlling API routes."""
         pass
-
-    @classmethod
-    def _validate_update_data(cls, data):
-        """
-        Validate update data to prevent security issues.
-
-        Args:
-            data: Dictionary of fields to update
-
-        Raises:
-            HTTPForbidden: If update data contains restricted fields
-        """
-        # Prevent updates to _id and system-managed fields
-        restricted_fields = ["_id", "created", "saved"]
-        for field in restricted_fields:
-            if field in data:
-                raise HTTPForbidden(f"Cannot update {field} field")
-
-    @classmethod
-    def create_plan(cls, data, token, breadcrumb):
-        """
-        Create a new plan document.
-
-        Args:
-            data: Dictionary containing plan data
-            token: Token dictionary with user_id and roles
-            breadcrumb: Breadcrumb dictionary for logging (contains at_time, by_user, from_ip, correlation_id)
-
-        Returns:
-            str: The ID of the created plan document
-        """
-        try:
-            cls._check_permission(token, "create")
-
-            # Remove _id if present (MongoDB will generate it)
-            if "_id" in data:
-                del data["_id"]
-
-            # Automatically populate required fields: created and saved
-            # These are system-managed and should not be provided by the client
-            # Use breadcrumb directly as it already has the correct structure
-            data["created"] = breadcrumb
-            data["saved"] = breadcrumb
-
-            mongo = MongoIO.get_instance()
-            config = Config.get_instance()
-            plan_id = mongo.create_document(config.PLAN_COLLECTION_NAME, data)
-            logger.info(f"Created plan { plan_id} for user {token.get('user_id')}")
-            return plan_id
-        except HTTPForbidden:
-            raise
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Error creating plan: {error_msg}")
-            raise HTTPInternalServerError(f"Failed to create plan: {error_msg}")
 
     @classmethod
     def get_plans(
@@ -168,7 +86,7 @@ class PlanService:
             )
             logger.info(f"Retrieved {len(plans)} plans for user {token.get('user_id')}")
             return plans
-        except (HTTPBadRequest, HTTPForbidden):
+        except HTTPBadRequest:
             raise
         except Exception as e:
             logger.error(f"Error retrieving plans: {str(e)}")
@@ -206,49 +124,3 @@ class PlanService:
         except Exception as e:
             logger.error(f"Error retrieving plan { plan_id}: {str(e)}")
             raise HTTPInternalServerError(f"Failed to retrieve plan { plan_id}")
-
-    @classmethod
-    def update_plan(cls, plan_id, data, token, breadcrumb):
-        """
-        Update a plan document.
-
-        Args:
-            plan_id: The plan ID to update
-            data: Dictionary containing fields to update
-            token: Token dictionary with user_id and roles
-            breadcrumb: Breadcrumb dictionary for logging
-
-        Returns:
-            dict: The updated plan document
-
-        Raises:
-            HTTPNotFound: If plan is not found
-        """
-        try:
-            cls._check_permission(token, "update")
-            cls._validate_update_data(data)
-
-            # Build update data with $set operator (excluding restricted fields)
-            restricted_fields = ["_id", "created", "saved"]
-            set_data = {k: v for k, v in data.items() if k not in restricted_fields}
-
-            # Automatically update the 'saved' field with current breadcrumb (system-managed)
-            # Use breadcrumb directly as it already has the correct structure
-            set_data["saved"] = breadcrumb
-
-            mongo = MongoIO.get_instance()
-            config = Config.get_instance()
-            updated = mongo.update_document(
-                config.PLAN_COLLECTION_NAME, document_id=plan_id, set_data=set_data
-            )
-
-            if updated is None:
-                raise HTTPNotFound(f"Plan { plan_id} not found")
-
-            logger.info(f"Updated plan { plan_id} for user {token.get('user_id')}")
-            return updated
-        except (HTTPForbidden, HTTPNotFound):
-            raise
-        except Exception as e:
-            logger.error(f"Error updating plan { plan_id}: {str(e)}")
-            raise HTTPInternalServerError(f"Failed to update plan { plan_id}")

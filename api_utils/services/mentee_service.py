@@ -3,8 +3,7 @@ Mentee service for business logic and RBAC.
 
 Handles RBAC checks and MongoDB operations for the Mentee domain. A Mentee
 document holds the mentor's notes about a single mentee, keyed by the mentee's
-Profile id. The read endpoint follows a "create-if-missing" pattern so the UI
-always receives a valid document for a known Profile.
+Profile id.
 
 Per the API standards (separation of concerns), this service contains business
 logic only. It raises the appropriate domain exceptions (e.g. HTTPForbidden,
@@ -26,18 +25,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Fields the client may never set/overwrite directly (system-managed).
-RESTRICTED_FIELDS = ["_id", "created", "saved"]
-
 
 class MenteeService:
     """
-    Service class for Mentee domain operations.
+    Service class for Mentee domain operations (read-only in shared api_utils).
 
     Handles:
     - RBAC authorization checks (requires the ``mentor`` or ``admin`` role)
     - MongoDB operations via MongoIO singleton
-    - Read-with-create-if-missing and update of the mentee-notes document
+    - Read-only lookup of the mentee-notes document (404 if missing)
     """
 
     @classmethod
@@ -55,7 +51,7 @@ class MenteeService:
 
         Args:
             token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read', 'update')
+            operation: The operation being performed (e.g., 'read')
 
         Raises:
             HTTPForbidden: If the caller holds neither the ``mentor`` nor the
@@ -88,52 +84,12 @@ class MenteeService:
             raise HTTPBadRequest(f"Invalid {label}: {value}")
 
     @classmethod
-    def _validate_update_data(cls, data):
-        """
-        Reject updates that target system-managed fields.
-
-        Args:
-            data: Dictionary of fields to update
-
-        Raises:
-            HTTPForbidden: If update data contains restricted fields
-        """
-        for field in RESTRICTED_FIELDS:
-            if field in data:
-                raise HTTPForbidden(f"Cannot update {field} field")
-
-    @classmethod
-    def _default_document(cls, profile_object_id, breadcrumb):
-        """
-        Build a schema-valid default Mentee document for a Profile.
-
-        The shape satisfies the Mentee JSON schema (``additionalProperties:
-        false``): ``profile_id`` is an ``ObjectId``, ``status`` defaults to
-        ``active``, the optional text fields default to empty strings, and the
-        ``created``/``saved`` breadcrumbs come from the request. The optional
-        ``name``, ``next_appointment``, and ``schedule`` fields are omitted
-        rather than seeded with values that would fail pattern/format
-        validation.
-        """
-        return {
-            "profile_id": profile_object_id,
-            "status": "active",
-            "description": "",
-            "focus": "",
-            "homework": "",
-            "notes": "",
-            "created": breadcrumb,
-            "saved": breadcrumb,
-        }
-
-    @classmethod
     def get_mentee(cls, profile_id, token, breadcrumb):
         """
-        Retrieve the mentee-notes document for a Profile, creating it if needed.
+        Retrieve the mentee-notes document for a Profile.
 
-        Looks up the Mentee document by ``profile_id``. If none exists yet, a
-        default document is created and returned so callers always receive a
-        valid document.
+        Looks up the Mentee document by ``profile_id``. Returns 404 when no
+        document exists; create-if-missing belongs on the Mentor API subclass.
 
         Args:
             profile_id: The mentee Profile id (string ObjectId)
@@ -141,11 +97,12 @@ class MenteeService:
             breadcrumb: Breadcrumb dictionary for audit/logging
 
         Returns:
-            dict: The existing or newly created Mentee document
+            dict: The existing Mentee document
 
         Raises:
             HTTPBadRequest: If profile_id is not a valid ObjectId
             HTTPForbidden: If the caller does not hold the ``mentor`` role
+            HTTPNotFound: If no Mentee document exists for the profile
         """
         try:
             cls._check_permission(token, "read")
@@ -165,68 +122,11 @@ class MenteeService:
                 )
                 return existing[0]
 
-            # Create-if-missing: persist a default document and return it.
-            document = cls._default_document(profile_object_id, breadcrumb)
-            mentee_id = mongo.create_document(collection_name, document)
-            created = mongo.get_document(collection_name, mentee_id)
-            logger.info(
-                f"Created default mentee {mentee_id} for profile {profile_id} "
-                f"for user {token.get('user_id')}"
-            )
-            return created
-        except (HTTPBadRequest, HTTPForbidden):
+            raise HTTPNotFound(f"Mentee for profile {profile_id} not found")
+        except (HTTPBadRequest, HTTPForbidden, HTTPNotFound):
             raise
         except Exception as e:
             logger.error(f"Error retrieving mentee for profile {profile_id}: {str(e)}")
             raise HTTPInternalServerError(
                 f"Failed to retrieve mentee for profile {profile_id}"
             )
-
-    @classmethod
-    def update_mentee(cls, mentee_id, data, token, breadcrumb):
-        """
-        Update a Mentee notes document.
-
-        Args:
-            mentee_id: The Mentee document id (string ObjectId)
-            data: Dictionary containing fields to update
-            token: Token dictionary with user_id and roles
-            breadcrumb: Breadcrumb dictionary for audit/logging
-
-        Returns:
-            dict: The updated Mentee document
-
-        Raises:
-            HTTPBadRequest: If mentee_id is not a valid ObjectId
-            HTTPForbidden: If the caller lacks the ``mentor`` role or the update
-                targets a restricted field
-            HTTPNotFound: If the Mentee document does not exist
-        """
-        try:
-            cls._check_permission(token, "update")
-            cls._validate_update_data(data)
-            mentee_object_id = cls._to_object_id(mentee_id, "mentee_id")
-
-            # Build $set data, excluding restricted fields, and stamp 'saved'.
-            set_data = {k: v for k, v in data.items() if k not in RESTRICTED_FIELDS}
-            set_data["saved"] = breadcrumb
-
-            mongo = MongoIO.get_instance()
-            config = Config.get_instance()
-            collection_name = cls._collection_name(config)
-            updated = mongo.update_document(
-                collection_name,
-                match={"_id": mentee_object_id},
-                set_data=set_data,
-            )
-
-            if updated is None:
-                raise HTTPNotFound(f"Mentee {mentee_id} not found")
-
-            logger.info(f"Updated mentee {mentee_id} for user {token.get('user_id')}")
-            return updated
-        except (HTTPBadRequest, HTTPForbidden, HTTPNotFound):
-            raise
-        except Exception as e:
-            logger.error(f"Error updating mentee {mentee_id}: {str(e)}")
-            raise HTTPInternalServerError(f"Failed to update mentee {mentee_id}")
