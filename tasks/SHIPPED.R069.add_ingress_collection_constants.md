@@ -1,6 +1,6 @@
 # R069 – Add ExternalEvent, Notification, Setting, and Payment collection constants
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R068_config_constants_pattern_and_drop_legacy_collections`  
 **Description**: Add Config constants for persisted MongoDB dictionaries that are missing from Config after R068: F-D29 ingress/Discovery collections and F-D22 commerce collections. Uses the inline constants pattern from R068.
@@ -70,4 +70,26 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+### Plan
+Add four inline collection-name constants to the `# Data collection names` group in `Config.__init__`, using configurator `file_name` values (without `.yaml`): `ExternalEvent`, `Notification`, `Setting`, `Payment`. Do not add them to `config_strings` or create `tests/test_data/config/` overrides. Do not add Product/Discount/Card collection constants. Extend `tests/config/test_config_constants.py` to assert the four values, that they are absent from `config_strings`, and that they survive `initialize()`.
+
+### Changes
+- `api_utils/config/config.py` — added `EXTERNAL_EVENT_COLLECTION_NAME`, `NOTIFICATION_COLLECTION_NAME`, `SETTING_COLLECTION_NAME`, `PAYMENT_COLLECTION_NAME` after `NOTE_COLLECTION_NAME`.
+- `tests/config/test_config_constants.py` — asserted values in `test_data_collection_names` and `test_constants_survive_initialize`; added the four keys to `test_constants_not_in_config_strings`.
+
+### Commands run
+- `pipenv run test tests/config/` — Pipfile `test` script ignored the extra path and ran the full unit suite (expected).
+- `pipenv run test`
+- `pipenv run lint` — failed on pre-existing files (see below).
+- `pipenv run black --check api_utils/config/config.py tests/config/test_config_constants.py` — both files unchanged.
+- `pipenv run build`
+
+### Test results
+- Unit tests: **269 passed**, 24 deselected, 15 warnings (both `pipenv run test tests/config/` and `pipenv run test`).
+- Lint: repo-wide `pipenv run lint` failed — Black would reformat 25 **pre-existing** files (flask_utils, routes, other tests, etc.). Changed files pass `black --check`. Black also warned: Python 3.12 cannot parse code formatted for Python 3.14 (safety check vs target version).
+- Build: **succeeded** — `api_utils-0.6.0.tar.gz` and `api_utils-0.6.0-py3-none-any.whl`.
+
+### Follow-ups
+- None for this task. Orchestrator confirmation: `pipenv run test` 269 passed, build success. Status set to Shipped.
+
+Did **not** commit.

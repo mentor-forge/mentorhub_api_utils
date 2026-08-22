@@ -90,6 +90,10 @@ class Config:
             self.MENTEE_COLLECTION_NAME = "Mentee"
             self.RATING_COLLECTION_NAME = "Rating"
             self.NOTE_COLLECTION_NAME = "Note"
+            self.EXTERNAL_EVENT_COLLECTION_NAME = "ExternalEvent"
+            self.NOTIFICATION_COLLECTION_NAME = "Notification"
+            self.SETTING_COLLECTION_NAME = "Setting"
+            self.PAYMENT_COLLECTION_NAME = "Payment"
 
             # Role constants
             self.ROLE_MENTOR = "mentor"

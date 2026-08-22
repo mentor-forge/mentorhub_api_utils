@@ -35,6 +35,10 @@ class TestConfigConstants(unittest.TestCase):
         self.assertEqual(self.config.MENTEE_COLLECTION_NAME, "Mentee")
         self.assertEqual(self.config.RATING_COLLECTION_NAME, "Rating")
         self.assertEqual(self.config.NOTE_COLLECTION_NAME, "Note")
+        self.assertEqual(self.config.EXTERNAL_EVENT_COLLECTION_NAME, "ExternalEvent")
+        self.assertEqual(self.config.NOTIFICATION_COLLECTION_NAME, "Notification")
+        self.assertEqual(self.config.SETTING_COLLECTION_NAME, "Setting")
+        self.assertEqual(self.config.PAYMENT_COLLECTION_NAME, "Payment")
 
     def test_role_constants(self):
         self.assertEqual(self.config.ROLE_MENTOR, "mentor")
@@ -71,6 +75,10 @@ class TestConfigConstants(unittest.TestCase):
             "MENTEE_COLLECTION_NAME",
             "RATING_COLLECTION_NAME",
             "NOTE_COLLECTION_NAME",
+            "EXTERNAL_EVENT_COLLECTION_NAME",
+            "NOTIFICATION_COLLECTION_NAME",
+            "SETTING_COLLECTION_NAME",
+            "PAYMENT_COLLECTION_NAME",
             "ROLE_MENTOR",
             "ROLE_MENTEE",
             "ROLE_COORDINATOR",
@@ -108,6 +116,10 @@ class TestConfigConstants(unittest.TestCase):
         self.assertEqual(self.config.ROLE_ADMIN, "admin")
         self.assertEqual(self.config.EVENT_TYPE_LOGIN, "login")
         self.assertEqual(self.config.ENUMERATORS_COLLECTION_NAME, "DatabaseEnumerators")
+        self.assertEqual(self.config.EXTERNAL_EVENT_COLLECTION_NAME, "ExternalEvent")
+        self.assertEqual(self.config.NOTIFICATION_COLLECTION_NAME, "Notification")
+        self.assertEqual(self.config.SETTING_COLLECTION_NAME, "Setting")
+        self.assertEqual(self.config.PAYMENT_COLLECTION_NAME, "Payment")
 
 
 if __name__ == "__main__":
