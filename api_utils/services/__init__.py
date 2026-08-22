@@ -9,6 +9,7 @@ from api_utils.services.external_event_service import ExternalEventService
 from api_utils.services.journey_service import JourneyService, TEMPLATE_JOURNEY_ID
 from api_utils.services.mentee_service import MenteeService
 from api_utils.services.note_service import NoteService
+from api_utils.services.notification_service import NotificationService
 from api_utils.services.path_service import PathService
 from api_utils.services.plan_service import PlanService
 from api_utils.services.profile_service import ProfileService
@@ -22,6 +23,7 @@ __all__ = [
     "JourneyService",
     "MenteeService",
     "NoteService",
+    "NotificationService",
     "PathService",
     "PlanService",
     "ProfileService",
