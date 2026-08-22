@@ -5,10 +5,16 @@ Handles RBAC checks and MongoDB operations for Encounter domain.
 """
 
 from api_utils import MongoIO, Config
+from api_utils.mongo_utils import encode_document
+from api_utils.mongo_utils.list_query import and_match
 from api_utils.flask_utils.exceptions import (
-    HTTPForbidden,
     HTTPNotFound,
     HTTPInternalServerError,
+)
+from api_utils.services.rbac import (
+    EMPTY_SCOPE_MATCH,
+    build_outbound_match,
+    require_outbound,
 )
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -17,42 +23,55 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+ARCHIVED_STATUS = "archived"
+ENCOUNTER_ID_PROPERTIES = ["mentor_id", "mentee_id"]
+
 
 class EncounterService:
     """
     Service class for Encounter domain operations (read-only in shared api_utils).
 
     Handles:
-    - RBAC authorization checks (mentor/admin read)
+    - Outbound RBAC visibility on shared GET/list
     - MongoDB operations via MongoIO singleton
     """
 
     @classmethod
     def _check_permission(cls, token, operation, breadcrumb):
-        """
-        Authorize a read operation for the Encounter domain.
+        """Shared reads require a valid token only; outbound filtering applies separately."""
+        pass
 
-        Admins and mentors may read encounter data. Write operations belong
-        on the Mentor API subclass.
+    @classmethod
+    def _encounter_identity_or(cls, token):
+        or_clauses = []
+        profile_id = token.get("profile_id")
+        mentor_id = token.get("mentor_id")
 
-        Args:
-            token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read')
-            breadcrumb: Breadcrumb dictionary for audit/logging
+        if mentor_id:
+            clause = {"mentor_id": mentor_id}
+            encode_document(clause, ENCOUNTER_ID_PROPERTIES, [])
+            or_clauses.append(clause)
+        if profile_id:
+            mentor_clause = {"mentor_id": profile_id}
+            encode_document(mentor_clause, ENCOUNTER_ID_PROPERTIES, [])
+            or_clauses.append(mentor_clause)
+            mentee_clause = {"mentee_id": profile_id}
+            encode_document(mentee_clause, ENCOUNTER_ID_PROPERTIES, [])
+            or_clauses.append(mentee_clause)
 
-        Raises:
-            HTTPForbidden: If the caller lacks the required role
-        """
-        config = Config.get_instance()
-        roles = token.get("roles", []) or []
+        if not or_clauses:
+            return EMPTY_SCOPE_MATCH
+        return {"$or": or_clauses}
 
-        if config.ROLE_ADMIN in roles:
-            return
-
-        if config.ROLE_MENTOR not in roles:
-            raise HTTPForbidden(
-                "Mentor or admin role required to access encounter data"
-            )
+    @classmethod
+    def _outbound_match(cls, token):
+        return build_outbound_match(
+            token,
+            [
+                {"status": {"$ne": ARCHIVED_STATUS}},
+                cls._encounter_identity_or(token),
+            ],
+        )
 
     @classmethod
     def _normalize_mentee_id(cls, mentee_id):
@@ -88,15 +107,19 @@ class EncounterService:
 
         Returns:
             dict | None: The most recent encounter summary, or ``None`` when the
-            mentee has no encounters.
+            mentee has no visible encounters.
         """
         cls._check_permission(token, "read", breadcrumb)
 
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
+        query = and_match(
+            {"mentee_id": cls._normalize_mentee_id(mentee_id)},
+            cls._outbound_match(token),
+        )
         encounters = mongo.get_documents(
             config.ENCOUNTER_COLLECTION_NAME,
-            match={"mentee_id": cls._normalize_mentee_id(mentee_id)},
+            match=query,
             sort_by=[("date", DESCENDING)],
         )
         if not encounters:
@@ -135,7 +158,7 @@ class EncounterService:
             size: Optional page size (paginated read)
 
         Returns:
-            list[dict]: The mentee's Encounter documents, most recent first.
+            list[dict]: The mentee's visible Encounter documents, most recent first.
         """
         cls._check_permission(token, "read", breadcrumb)
 
@@ -143,7 +166,10 @@ class EncounterService:
         config = Config.get_instance()
 
         query_kwargs = {
-            "match": {"mentee_id": cls._normalize_mentee_id(mentee_id)},
+            "match": and_match(
+                {"mentee_id": cls._normalize_mentee_id(mentee_id)},
+                cls._outbound_match(token),
+            ),
             "sort_by": [("date", DESCENDING)],
         }
         if offset is not None and size is not None:
@@ -174,7 +200,7 @@ class EncounterService:
             dict: The encounter document
 
         Raises:
-            HTTPNotFound: If encounter is not found
+            HTTPNotFound: If encounter is not found or not visible
         """
         try:
             cls._check_permission(token, "read", breadcrumb)
@@ -184,14 +210,17 @@ class EncounterService:
             encounter = mongo.get_document(
                 config.ENCOUNTER_COLLECTION_NAME, encounter_id
             )
-            if encounter is None:
-                raise HTTPNotFound(f"Encounter { encounter_id} not found")
+            require_outbound(
+                encounter,
+                cls._outbound_match(token),
+                not_found_message=f"Encounter {encounter_id} not found",
+            )
 
             logger.info(
                 f"Retrieved encounter { encounter_id} for user {token.get('user_id')}"
             )
             return encounter
-        except (HTTPForbidden, HTTPNotFound):
+        except HTTPNotFound:
             raise
         except Exception as e:
             logger.error(f"Error retrieving encounter { encounter_id}: {str(e)}")

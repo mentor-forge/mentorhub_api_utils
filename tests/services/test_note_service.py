@@ -44,20 +44,21 @@ class TestNoteService(unittest.TestCase):
             call_kwargs["match"]["resource_id"], ObjectId(self.resource_id)
         )
 
+    @patch("api_utils.services.note_service.execute_list_query")
     @patch("api_utils.services.note_service.Config.get_instance")
-    @patch("api_utils.services.note_service.MongoIO.get_instance")
-    def test_get_notes_for_resource_invalid_id(self, mock_get_mongo, mock_get_config):
+    def test_get_notes_for_resource_invalid_id(
+        self, mock_get_config, mock_execute_list
+    ):
         mock_config = MagicMock()
         mock_config.NOTE_COLLECTION_NAME = "Note"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_get_mongo.return_value = mock_mongo
 
         with self.assertRaises(HTTPBadRequest):
             NoteService.get_notes_for_resource(
                 "invalid", self.mock_token, self.mock_breadcrumb
             )
+        mock_execute_list.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -178,6 +178,7 @@ class TestExternalEventService(unittest.TestCase):
     def test_get_external_event_success(self, mock_get_mongo, mock_get_config):
         mock_config = MagicMock()
         mock_config.EXTERNAL_EVENT_COLLECTION_NAME = "ExternalEvent"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
 
         mock_mongo = MagicMock()
@@ -193,6 +194,31 @@ class TestExternalEventService(unittest.TestCase):
 
         self.assertEqual(str(result["_id"]), CREATED_ID)
         mock_mongo.get_document.assert_called_once_with("ExternalEvent", CREATED_ID)
+
+    @patch("api_utils.services.external_event_service.Config.get_instance")
+    @patch("api_utils.services.external_event_service.MongoIO.get_instance")
+    def test_get_external_event_hidden_for_non_admin(
+        self, mock_get_mongo, mock_get_config
+    ):
+        from api_utils.flask_utils.exceptions import HTTPNotFound
+
+        mock_config = MagicMock()
+        mock_config.EXTERNAL_EVENT_COLLECTION_NAME = "ExternalEvent"
+        mock_config.ROLE_ADMIN = "admin"
+        mock_get_config.return_value = mock_config
+
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = {
+            "_id": ObjectId(CREATED_ID),
+            **self.sample_data,
+        }
+        mock_get_mongo.return_value = mock_mongo
+
+        token = {"user_id": "test_user", "roles": ["developer"]}
+        with self.assertRaises(HTTPNotFound):
+            ExternalEventService.get_external_event(
+                CREATED_ID, token, self.mock_breadcrumb
+            )
 
     @patch("api_utils.services.external_event_service.Config.get_instance")
     @patch("api_utils.services.external_event_service.MongoIO.get_instance")

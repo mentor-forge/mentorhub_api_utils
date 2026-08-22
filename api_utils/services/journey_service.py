@@ -13,12 +13,20 @@ from api_utils import MongoIO, Config
 from api_utils.mongo_utils import encode_document
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
-    HTTPForbidden,
     HTTPNotFound,
     HTTPInternalServerError,
 )
+from api_utils.services.rbac import (
+    EMPTY_SCOPE_MATCH,
+    build_outbound_match,
+    matches_outbound,
+    require_outbound,
+)
 
 logger = logging.getLogger(__name__)
+
+ARCHIVED_STATUS = "archived"
+JOURNEY_ID_PROPERTIES = ["_id", "profile_id"]
 
 TEMPLATE_JOURNEY_ID = "ffff00000000000000000001"
 
@@ -32,6 +40,30 @@ class JourneyService:
             return
 
     @classmethod
+    def _journey_identity_or(cls, token):
+        """Own-profile scope; Journey has no customer/mentor fields today."""
+        profile_id = token.get("profile_id")
+        if not profile_id:
+            return EMPTY_SCOPE_MATCH
+
+        or_clauses = []
+        for field in ("profile_id", "_id"):
+            clause = {field: profile_id}
+            encode_document(clause, JOURNEY_ID_PROPERTIES, [])
+            or_clauses.append(clause)
+        return {"$or": or_clauses}
+
+    @classmethod
+    def _outbound_match(cls, token):
+        return build_outbound_match(
+            token,
+            [
+                {"status": {"$ne": ARCHIVED_STATUS}},
+                cls._journey_identity_or(token),
+            ],
+        )
+
+    @classmethod
     def _validate_object_id(cls, value, field_name):
         try:
             ObjectId(value)
@@ -40,14 +72,7 @@ class JourneyService:
 
     @classmethod
     def _oid(cls, value):
-        """Coerce an id to its canonical BSON ``ObjectId`` form.
-
-        Inbound ids arrive as strings while stored ids are ``ObjectId``;
-        ``ObjectId(...)`` accepts both, so this yields a single canonical type
-        for in-memory equality checks. Persistence is handled separately by
-        ``encode_document`` at the ``MongoIO`` boundary, so services never write
-        the string form back into a document.
-        """
+        """Coerce an id to its canonical BSON ``ObjectId`` form."""
         return ObjectId(value)
 
     @classmethod
@@ -57,8 +82,11 @@ class JourneyService:
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
             journey = mongo.get_document(config.JOURNEY_COLLECTION_NAME, journey_id)
-            if journey is None:
-                raise HTTPNotFound(f"Journey {journey_id} not found")
+            require_outbound(
+                journey,
+                cls._outbound_match(token),
+                not_found_message=f"Journey {journey_id} not found",
+            )
             return journey
         except HTTPNotFound:
             raise
@@ -74,40 +102,12 @@ class JourneyService:
         Returns a dict with ``library``, ``now``, and ``next`` counts.
         ``library`` and ``now`` count their resource entries directly; ``next``
         sums the resource entries across all Next topics. Returns zeros when the
-        mentee has no active journey.
-
-        Unlike the generic Journey reads (which are open), the Mentor Dashboard
-        progress aggregation is gated to the ``mentor`` or ``admin`` role, so the
-        role check is performed inline here rather than through the shared
-        ``_check_permission(token, "read")`` (which intentionally allows open
-        reads for the mentee-facing Journey surface).
-
-        Args:
-            profile_id: The mentee Profile id whose journey progress is wanted
-            token: Token dictionary with user_id and roles
-            breadcrumb: Breadcrumb dictionary for audit/logging
-
-        Returns:
-            dict: ``{"library": int, "now": int, "next": int}``
-
-        Raises:
-            HTTPForbidden: If the caller does not hold the ``mentor`` or
-                ``admin`` role
+        mentee has no active journey or the journey is not visible to the caller.
         """
-        config = Config.get_instance()
-        allowed_roles = {config.ROLE_MENTOR, config.ROLE_ADMIN}
-        roles = token.get("roles", []) or []
-        if not allowed_roles.intersection(roles):
-            raise HTTPForbidden("Mentor or admin role required to access journey data")
-
         mongo = MongoIO.get_instance()
-        # Journey.profile_id is stored as a BSON ObjectId (see Mentee clone),
-        # so encode the match id before querying. MongoIO.get_documents does not
-        # coerce match values (unlike get_document/update_document), so a raw
-        # string profile_id would silently match nothing. A value that is
-        # already an ObjectId is left unchanged by encode_document.
+        config = Config.get_instance()
         match = {"profile_id": profile_id, "status": "active"}
-        encode_document(match, ["profile_id"], [])
+        encode_document(match, JOURNEY_ID_PROPERTIES, [])
         journeys = mongo.get_documents(
             config.JOURNEY_COLLECTION_NAME,
             match=match,
@@ -116,6 +116,10 @@ class JourneyService:
             return {"library": 0, "now": 0, "next": 0}
 
         journey = journeys[0]
+        outbound = cls._outbound_match(token)
+        if not matches_outbound(journey, outbound):
+            return {"library": 0, "now": 0, "next": 0}
+
         next_resources = sum(
             len(topic.get("resources") or []) for topic in (journey.get("next") or [])
         )

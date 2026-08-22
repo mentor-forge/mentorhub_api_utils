@@ -166,6 +166,7 @@ class TestNotificationService(unittest.TestCase):
     def test_get_notifications_success(self, mock_get_config, mock_execute_list):
         mock_config = MagicMock()
         mock_config.NOTIFICATION_COLLECTION_NAME = "Notification"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
         mock_execute_list.return_value = [{"_id": "1", "name": "Invite pending"}]
 
@@ -184,6 +185,34 @@ class TestNotificationService(unittest.TestCase):
             kwargs["sort_by"],
             [("created.at_time", DESCENDING), ("_id", DESCENDING)],
         )
+
+    @patch("api_utils.services.notification_service.execute_list_query")
+    @patch("api_utils.services.notification_service.Config.get_instance")
+    def test_get_notifications_outbound_includes_global_and_own_ids(
+        self, mock_get_config, mock_execute_list
+    ):
+        mock_config = MagicMock()
+        mock_config.NOTIFICATION_COLLECTION_NAME = "Notification"
+        mock_config.ROLE_ADMIN = "admin"
+        mock_get_config.return_value = mock_config
+        mock_execute_list.return_value = []
+
+        token = {
+            "user_id": "carol",
+            "roles": ["customer"],
+            "profile_id": PROFILE_ID,
+            "customer_id": CUSTOMER_ID,
+        }
+        NotificationService.get_notifications(token, self.mock_breadcrumb)
+
+        match = mock_execute_list.call_args.kwargs["match"]
+        self.assertEqual(match["status"], {"$ne": "archived"})
+        or_clauses = match["$or"]
+        self.assertIn({"global": {"$exists": True}}, or_clauses)
+        profile_ids = [clause.get("profile_id") for clause in or_clauses]
+        customer_ids = [clause.get("customer_id") for clause in or_clauses]
+        self.assertIn(ObjectId(PROFILE_ID), profile_ids)
+        self.assertIn(ObjectId(CUSTOMER_ID), customer_ids)
 
     @patch("api_utils.services.notification_service.execute_list_query")
     @patch("api_utils.services.notification_service.Config.get_instance")

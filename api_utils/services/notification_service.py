@@ -11,6 +11,7 @@ from api_utils.mongo_utils import encode_document
 from api_utils.mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
+    and_match,
     build_sort_by,
     execute_list_query,
 )
@@ -18,9 +19,12 @@ from api_utils.flask_utils.exceptions import (
     HTTPForbidden,
     HTTPInternalServerError,
 )
+from api_utils.services.rbac import build_outbound_match
 import logging
 
 logger = logging.getLogger(__name__)
+
+ARCHIVED_STATUS = "archived"
 
 # Live BSON schema (Notification 0.1.0.0): `_id`, `profile_id`, `customer_id`,
 # and `mentor_id` are objectId. Breadcrumb `at_time` fields are dates;
@@ -47,6 +51,27 @@ class NotificationService:
     def _check_permission(cls, token, operation):
         """Any authenticated user may create and read notifications."""
         pass
+
+    @classmethod
+    def _notification_identity_or(cls, token):
+        or_clauses = [{"global": {"$exists": True}}]
+        for field in ("profile_id", "customer_id", "mentor_id"):
+            value = token.get(field)
+            if value:
+                clause = {field: value}
+                encode_document(clause, ID_PROPERTIES, DATE_PROPERTIES)
+                or_clauses.append(clause)
+        return {"$or": or_clauses}
+
+    @classmethod
+    def _outbound_match(cls, token):
+        return build_outbound_match(
+            token,
+            [
+                {"status": {"$ne": ARCHIVED_STATUS}},
+                cls._notification_identity_or(token),
+            ],
+        )
 
     @classmethod
     def create_notification(cls, data, token, breadcrumb):
@@ -108,7 +133,7 @@ class NotificationService:
             breadcrumb: Audit breadcrumb
             offset: Zero-based start index
             size: Number of documents to return
-            match: Optional MongoDB match filter callers can extend later
+            match: Optional MongoDB match filter AND'd with outbound scope
 
         Returns:
             list: Notification documents newest first by created.at_time
@@ -117,9 +142,10 @@ class NotificationService:
             cls._check_permission(token, "read")
 
             config = Config.get_instance()
-            list_match = dict(match) if match else {}
-            if list_match:
-                encode_document(list_match, ID_PROPERTIES, DATE_PROPERTIES)
+            extra = dict(match) if match else {}
+            if extra:
+                encode_document(extra, ID_PROPERTIES, DATE_PROPERTIES)
+            list_match = and_match(cls._outbound_match(token), extra)
 
             default = NOTIFICATION_LIST_ORDER["default"]
             sort_by = build_sort_by(

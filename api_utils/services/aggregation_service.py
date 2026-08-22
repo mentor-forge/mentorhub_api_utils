@@ -13,6 +13,7 @@ from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
     HTTPInternalServerError,
 )
+from api_utils.services.resource_service import ResourceService
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +47,23 @@ class AggregationService:
         Retrieve aggregation metrics for a resource.
 
         Returns:
-            dict or None: The aggregation document, or None if none exists
+            dict or None: The aggregation document, or None if none exists or the
+            parent Resource is not visible to the caller
         """
         try:
             resource_object_id = cls._resource_object_id(resource_id)
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
+
+            resource = mongo.get_document(config.RESOURCE_COLLECTION_NAME, resource_id)
+            from api_utils.services.rbac import matches_outbound
+
+            if resource is None or not matches_outbound(
+                resource, ResourceService._outbound_match(token)
+            ):
+                return None
+
             aggregation = cls._find_aggregation(
                 mongo, config.RESOURCE_AGGREGATION_COLLECTION_NAME, resource_object_id
             )

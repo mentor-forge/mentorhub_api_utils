@@ -25,9 +25,16 @@ from api_utils.mongo_utils.list_query import (
     execute_list_query,
 )
 from api_utils.flask_utils.exceptions import HTTPNotFound
+from api_utils.services.rbac import (
+    EMPTY_SCOPE_MATCH,
+    build_outbound_match,
+    require_outbound,
+)
 import logging
 
 logger = logging.getLogger(__name__)
+
+ARCHIVED_STATUS = "archived"
 
 # Live BSON schema (Profile 0.1.0.0): `_id`, `customer_id`, and `mentor_id` are
 # objectId; the nested `experience[].roles[]` `start` / `end` fields are dates.
@@ -64,7 +71,7 @@ class ProfileService:
     Service class for Profile domain operations.
 
     Handles:
-    - RBAC authorization checks
+    - Outbound RBAC visibility on shared GET/list
     - MongoDB operations via MongoIO singleton
     - Consume (GET / list) and global create for the Profile domain
     """
@@ -72,20 +79,53 @@ class ProfileService:
     @classmethod
     def _check_permission(cls, token, operation):
         """
-        Check if the user has permission to perform an operation.
-
-        Args:
-            token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read', 'create')
-
-        Raises:
-            HTTPForbidden: If user doesn't have required permission
-
         Reads and creates on the shared class require a valid token only.
         Admin and Customer subclasses add the inbound write check for
-        ``create_profile``; outbound read filtering arrives in R082.
+        ``create_profile``.
         """
         pass
+
+    @classmethod
+    def _profile_identity_or(cls, token):
+        """Build the $or identity scope for Profile list/get visibility."""
+        or_clauses = []
+        profile_id = token.get("profile_id")
+        user_id = token.get("user_id")
+        customer_id = token.get("customer_id")
+        mentor_id = token.get("mentor_id")
+
+        if profile_id:
+            clause = {"_id": profile_id}
+            encode_document(clause, ID_PROPERTIES, DATE_PROPERTIES)
+            or_clauses.append(clause)
+        if user_id:
+            or_clauses.append({"name": user_id})
+        if customer_id:
+            clause = {"customer_id": customer_id}
+            encode_document(clause, ID_PROPERTIES, DATE_PROPERTIES)
+            or_clauses.append(clause)
+        if mentor_id:
+            clause = {"mentor_id": mentor_id}
+            encode_document(clause, ID_PROPERTIES, DATE_PROPERTIES)
+            or_clauses.append(clause)
+        elif profile_id:
+            clause = {"mentor_id": profile_id}
+            encode_document(clause, ID_PROPERTIES, DATE_PROPERTIES)
+            or_clauses.append(clause)
+
+        if not or_clauses:
+            return EMPTY_SCOPE_MATCH
+        return {"$or": or_clauses}
+
+    @classmethod
+    def _outbound_match(cls, token):
+        return build_outbound_match(
+            token,
+            [
+                {"status": {"$ne": ARCHIVED_STATUS}},
+                cls._profile_identity_or(token),
+            ],
+        )
 
     @classmethod
     def get_profile_by_token(cls, token, breadcrumb):
@@ -141,10 +181,9 @@ class ProfileService:
         cls._check_permission(token, "read")
 
         config = Config.get_instance()
-        # Outbound RBAC scoping (archived rows, customer/mentor/own-profile
-        # visibility) lands in R082; until then the list is unscoped.
-        base_match = {}
-        match = build_match_filter(base_match, filters or {}, PROFILE_LIST_FILTERS)
+        match = build_match_filter(
+            cls._outbound_match(token), filters or {}, PROFILE_LIST_FILTERS
+        )
         if sort_by is None:
             default = PROFILE_LIST_ORDER["default"]
             sort_by = build_sort_by(
@@ -179,15 +218,18 @@ class ProfileService:
             dict: The Profile document
 
         Raises:
-            HTTPNotFound: If the Profile is not found
+            HTTPNotFound: If the Profile is not found or not visible
         """
         cls._check_permission(token, "read")
 
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
         profile = mongo.get_document(config.PROFILE_COLLECTION_NAME, profile_id)
-        if profile is None:
-            raise HTTPNotFound(f"Profile {profile_id} not found")
+        require_outbound(
+            profile,
+            cls._outbound_match(token),
+            not_found_message=f"Profile {profile_id} not found",
+        )
 
         logger.info(f"Retrieved profile {profile_id} for user {token.get('user_id')}")
         return profile

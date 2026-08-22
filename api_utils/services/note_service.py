@@ -6,11 +6,13 @@ Handles RBAC checks and MongoDB operations for Note domain.
 
 from bson import ObjectId
 
-from api_utils import MongoIO, Config
+from api_utils import Config
+from api_utils.mongo_utils import encode_document
 from api_utils.mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
     MAX_SIZE,
+    and_match,
     build_match_filter,
     build_sort_by,
     execute_list_query,
@@ -19,9 +21,13 @@ from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
     HTTPInternalServerError,
 )
+from api_utils.services.rbac import EMPTY_SCOPE_MATCH, build_outbound_match
 import logging
 
 logger = logging.getLogger(__name__)
+
+ARCHIVED_STATUS = "archived"
+NOTE_ID_PROPERTIES = ["profile_id"]
 
 NOTE_LIST_FILTERS = {
     "status": {"type": "in_list", "field": "status"},
@@ -40,8 +46,28 @@ class NoteService:
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """Any authenticated user may read notes."""
+        """Any authenticated user may read notes; outbound filtering applies separately."""
         pass
+
+    @classmethod
+    def _note_identity_or(cls, token):
+        """Own-profile scope; Note schema has no customer_id field."""
+        profile_id = token.get("profile_id")
+        if not profile_id:
+            return EMPTY_SCOPE_MATCH
+        clause = {"profile_id": profile_id}
+        encode_document(clause, NOTE_ID_PROPERTIES, [])
+        return {"$or": [clause]}
+
+    @classmethod
+    def _outbound_match(cls, token):
+        return build_outbound_match(
+            token,
+            [
+                {"status": {"$ne": ARCHIVED_STATUS}},
+                cls._note_identity_or(token),
+            ],
+        )
 
     @classmethod
     def get_notes_for_resource(
@@ -80,7 +106,10 @@ class NoteService:
                 raise HTTPBadRequest("resource_id must be a valid MongoDB ObjectId")
 
             config = Config.get_instance()
-            base_match = {"resource_id": resource_object_id}
+            base_match = and_match(
+                {"resource_id": resource_object_id},
+                cls._outbound_match(token),
+            )
             match = build_match_filter(base_match, filters or {}, NOTE_LIST_FILTERS)
             if sort_by is None:
                 default = NOTE_LIST_ORDER["default"]

@@ -7,17 +7,18 @@ Handles RBAC checks and MongoDB operations for Resource domain.
 from api_utils import MongoIO, Config
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
-    HTTPForbidden,
     HTTPNotFound,
     HTTPInternalServerError,
 )
 from api_utils.mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
+    and_match,
     build_match_filter,
     build_sort_by,
     execute_list_query,
 )
+from api_utils.services.rbac import build_outbound_match, require_outbound
 import logging
 
 from bson import ObjectId
@@ -53,29 +54,20 @@ class ResourceService:
     Service class for Resource domain operations.
 
     Handles:
-    - RBAC authorization checks (placeholder for future implementation)
+    - Outbound RBAC visibility on shared GET/list
     - MongoDB operations via MongoIO singleton
     - Business logic for Resource domain (read-only)
     """
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """
-        Check if the user has permission to perform an operation.
-
-        Args:
-            token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read')
-
-        Raises:
-            HTTPForbidden: If user doesn't have required permission
-        """
+        """Shared reads require a valid token only; outbound filtering applies separately."""
         pass
 
     @classmethod
-    def _is_admin(cls, token, config):
-        admin_role = getattr(config, "ROLE_ADMIN", "admin")
-        return admin_role in token.get("roles", [])
+    def _outbound_match(cls, token):
+        """Catalog consume: non-admin callers see non-archived resources only."""
+        return build_outbound_match(token, [{"status": {"$ne": ARCHIVED_STATUS}}])
 
     @classmethod
     def get_resources(
@@ -108,11 +100,9 @@ class ResourceService:
             cls._check_permission(token, "read")
 
             config = Config.get_instance()
-            base_match = {}
-            if not cls._is_admin(token, config):
-                base_match["status"] = {"$ne": ARCHIVED_STATUS}
-
-            match = build_match_filter(base_match, filters or {}, RESOURCE_LIST_FILTERS)
+            match = build_match_filter(
+                cls._outbound_match(token), filters or {}, RESOURCE_LIST_FILTERS
+            )
             if sort_by is None:
                 default = RESOURCE_LIST_ORDER["default"]
                 sort_by = build_sort_by(
@@ -186,9 +176,10 @@ class ResourceService:
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
 
-            query = {"_id": {"$in": object_ids}}
-            if not cls._is_admin(token, config):
-                query["status"] = {"$ne": ARCHIVED_STATUS}
+            query = and_match(
+                {"_id": {"$in": object_ids}},
+                cls._outbound_match(token),
+            )
 
             documents = mongo.get_documents(
                 config.RESOURCE_COLLECTION_NAME,
@@ -221,7 +212,7 @@ class ResourceService:
             dict: {resource, aggregation, notes}
 
         Raises:
-            HTTPNotFound: If resource is not found
+            HTTPNotFound: If resource is not found or not visible
         """
         try:
             cls._check_permission(token, "read")
@@ -229,8 +220,11 @@ class ResourceService:
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
             resource = mongo.get_document(config.RESOURCE_COLLECTION_NAME, resource_id)
-            if resource is None:
-                raise HTTPNotFound(f"Resource { resource_id} not found")
+            require_outbound(
+                resource,
+                cls._outbound_match(token),
+                not_found_message=f"Resource {resource_id} not found",
+            )
 
             from api_utils.services.aggregation_service import AggregationService
             from api_utils.services.note_service import NoteService

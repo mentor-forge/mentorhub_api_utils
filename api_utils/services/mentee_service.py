@@ -15,15 +15,18 @@ responses.
 from api_utils import MongoIO, Config
 from api_utils.flask_utils.exceptions import (
     HTTPBadRequest,
-    HTTPForbidden,
     HTTPNotFound,
     HTTPInternalServerError,
 )
+from api_utils.services.rbac import is_admin, matches_outbound
 from bson import ObjectId
 from bson.errors import InvalidId
 import logging
 
 logger = logging.getLogger(__name__)
+
+ARCHIVED_STATUS = "archived"
+MENTEE_ID_PROPERTIES = ["profile_id"]
 
 
 class MenteeService:
@@ -31,9 +34,9 @@ class MenteeService:
     Service class for Mentee domain operations (read-only in shared api_utils).
 
     Handles:
-    - RBAC authorization checks (requires the ``mentor`` or ``admin`` role)
+    - Outbound RBAC visibility on shared GET
     - MongoDB operations via MongoIO singleton
-    - Read-only lookup of the mentee-notes document (404 if missing)
+    - Read-only lookup of the mentee-notes document (404 if missing or hidden)
     """
 
     @classmethod
@@ -43,25 +46,64 @@ class MenteeService:
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """
-        Authorize an operation for the Mentee domain.
+        """Shared reads require a valid token only; outbound filtering applies separately."""
+        pass
 
-        Users granted either the ``mentor`` or ``admin`` role (per the shared
-        ``Config`` role constants) may access mentee data through this service.
+    @classmethod
+    def _own_profile_match(cls, token):
+        profile_id = token.get("profile_id")
+        if not profile_id:
+            return None
+        clause = {"profile_id": profile_id}
+        from api_utils.mongo_utils import encode_document
 
-        Args:
-            token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read')
+        encode_document(clause, MENTEE_ID_PROPERTIES, [])
+        return clause
 
-        Raises:
-            HTTPForbidden: If the caller holds neither the ``mentor`` nor the
-                ``admin`` role
-        """
+    @classmethod
+    def _is_archived(cls, document):
+        status = document.get("status")
+        return status is not None and status == ARCHIVED_STATUS
+
+    @classmethod
+    def _mentor_of_profile(cls, profile_id, token):
+        """Return True when the caller is the mentor assigned to ``profile_id``."""
+        mentor_id = token.get("mentor_id")
+        token_profile_id = token.get("profile_id")
+        if not mentor_id and not token_profile_id:
+            return False
+
+        mongo = MongoIO.get_instance()
         config = Config.get_instance()
-        allowed_roles = {config.ROLE_MENTOR, config.ROLE_ADMIN}
-        roles = token.get("roles", []) or []
-        if not allowed_roles.intersection(roles):
-            raise HTTPForbidden("Mentor or admin role required to access mentee data")
+        profile = mongo.get_document(config.PROFILE_COLLECTION_NAME, str(profile_id))
+        if profile is None:
+            return False
+
+        profile_mentor_id = profile.get("mentor_id")
+        if mentor_id and str(profile_mentor_id) == str(mentor_id):
+            return True
+        if token_profile_id and str(profile_mentor_id) == str(token_profile_id):
+            return True
+        return False
+
+    @classmethod
+    def _require_mentee_visible(cls, document, token, profile_id):
+        if document is None:
+            raise HTTPNotFound(f"Mentee for profile {profile_id} not found")
+        if is_admin(token):
+            return document
+        if cls._is_archived(document):
+            raise HTTPNotFound(f"Mentee for profile {profile_id} not found")
+
+        own_match = cls._own_profile_match(token)
+        if own_match and matches_outbound(document, own_match):
+            return document
+
+        doc_profile_id = document.get("profile_id")
+        if cls._mentor_of_profile(doc_profile_id, token):
+            return document
+
+        raise HTTPNotFound(f"Mentee for profile {profile_id} not found")
 
     @classmethod
     def _to_object_id(cls, value, label):
@@ -89,7 +131,8 @@ class MenteeService:
         Retrieve the mentee-notes document for a Profile.
 
         Looks up the Mentee document by ``profile_id``. Returns 404 when no
-        document exists; create-if-missing belongs on the Mentor API subclass.
+        document exists or the caller cannot see it; create-if-missing belongs
+        on the Mentor API subclass.
 
         Args:
             profile_id: The mentee Profile id (string ObjectId)
@@ -101,8 +144,7 @@ class MenteeService:
 
         Raises:
             HTTPBadRequest: If profile_id is not a valid ObjectId
-            HTTPForbidden: If the caller does not hold the ``mentor`` role
-            HTTPNotFound: If no Mentee document exists for the profile
+            HTTPNotFound: If no Mentee document exists or is not visible
         """
         try:
             cls._check_permission(token, "read")
@@ -115,15 +157,15 @@ class MenteeService:
             existing = mongo.get_documents(
                 collection_name, match={"profile_id": profile_object_id}
             )
-            if existing:
-                logger.info(
-                    f"Retrieved mentee for profile {profile_id} "
-                    f"for user {token.get('user_id')}"
-                )
-                return existing[0]
+            document = existing[0] if existing else None
+            result = cls._require_mentee_visible(document, token, profile_id)
 
-            raise HTTPNotFound(f"Mentee for profile {profile_id} not found")
-        except (HTTPBadRequest, HTTPForbidden, HTTPNotFound):
+            logger.info(
+                f"Retrieved mentee for profile {profile_id} "
+                f"for user {token.get('user_id')}"
+            )
+            return result
+        except (HTTPBadRequest, HTTPNotFound):
             raise
         except Exception as e:
             logger.error(f"Error retrieving mentee for profile {profile_id}: {str(e)}")

@@ -13,6 +13,11 @@ from api_utils.flask_utils.exceptions import (
     HTTPInternalServerError,
     HTTPNotFound,
 )
+from api_utils.services.rbac import (
+    EMPTY_SCOPE_MATCH,
+    build_outbound_match,
+    require_outbound,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,6 +38,11 @@ class ExternalEventService:
     def _check_permission(cls, token, operation):
         """Any authenticated user may create external events."""
         pass
+
+    @classmethod
+    def _outbound_match(cls, token):
+        """Admin controls ExternalEvent; non-admin callers see nothing."""
+        return build_outbound_match(token, [EMPTY_SCOPE_MATCH])
 
     @classmethod
     def create_external_event(cls, data, token, breadcrumb):
@@ -93,18 +103,19 @@ class ExternalEventService:
             dict: The external event document
 
         Raises:
-            HTTPNotFound: If external event is not found
+            HTTPNotFound: If external event is not found or not visible
         """
         try:
             cls._check_permission(token, "read")
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
-            event = mongo.get_document(
-                config.EXTERNAL_EVENT_COLLECTION_NAME, event_id
+            event = mongo.get_document(config.EXTERNAL_EVENT_COLLECTION_NAME, event_id)
+            require_outbound(
+                event,
+                cls._outbound_match(token),
+                not_found_message=f"External event {event_id} not found",
             )
-            if event is None:
-                raise HTTPNotFound(f"External event {event_id} not found")
 
             logger.info(
                 f"Retrieved external event {event_id} "

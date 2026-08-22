@@ -17,9 +17,12 @@ from api_utils.mongo_utils.list_query import (
     build_sort_by,
     execute_list_query,
 )
+from api_utils.services.rbac import build_outbound_match, require_outbound
 import logging
 
 logger = logging.getLogger(__name__)
+
+ARCHIVED_STATUS = "archived"
 
 PATH_LIST_FILTERS = {
     "name": {"type": "contains", "field": "name"},
@@ -36,15 +39,20 @@ class PathService:
     Service class for Path domain operations (read-only in shared api_utils).
 
     Handles:
-    - RBAC authorization checks (authenticated read)
+    - Outbound RBAC visibility on shared GET/list
     - MongoDB operations via MongoIO singleton
     - Raw Path document reads (resource enrich belongs on Mentee BFF)
     """
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """Any authenticated user may read paths."""
+        """Any authenticated user may read paths; outbound filtering applies separately."""
         pass
+
+    @classmethod
+    def _outbound_match(cls, token):
+        """Catalog consume: non-admin callers see non-archived paths only."""
+        return build_outbound_match(token, [{"status": {"$ne": ARCHIVED_STATUS}}])
 
     @classmethod
     def get_paths(
@@ -73,7 +81,9 @@ class PathService:
         try:
             cls._check_permission(token, "read")
             config = Config.get_instance()
-            match = build_match_filter({}, filters or {}, PATH_LIST_FILTERS)
+            match = build_match_filter(
+                cls._outbound_match(token), filters or {}, PATH_LIST_FILTERS
+            )
             if sort_by is None:
                 default = PATH_LIST_ORDER["default"]
                 sort_by = build_sort_by(
@@ -109,7 +119,7 @@ class PathService:
             dict: The path document
 
         Raises:
-            HTTPNotFound: If path is not found
+            HTTPNotFound: If path is not found or not visible
         """
         try:
             cls._check_permission(token, "read")
@@ -117,8 +127,11 @@ class PathService:
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
             path = mongo.get_document(config.PATH_COLLECTION_NAME, path_id)
-            if path is None:
-                raise HTTPNotFound(f"Path { path_id} not found")
+            require_outbound(
+                path,
+                cls._outbound_match(token),
+                not_found_message=f"Path {path_id} not found",
+            )
 
             logger.info(f"Retrieved path { path_id} for user {token.get('user_id')}")
             return path

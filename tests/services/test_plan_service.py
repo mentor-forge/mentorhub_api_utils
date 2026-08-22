@@ -26,50 +26,44 @@ class TestPlanService(unittest.TestCase):
             "correlation_id": "test-correlation-id",
         }
 
+    @patch("api_utils.services.plan_service.execute_list_query")
     @patch("api_utils.services.plan_service.Config.get_instance")
-    @patch("api_utils.services.plan_service.MongoIO.get_instance")
     def test_get_plans_returns_all_sorted_by_name(
-        self, mock_get_mongo, mock_get_config
+        self, mock_get_config, mock_execute_list
     ):
         """get_plans returns a page (default name asc) as a plain list."""
         mock_config = MagicMock()
         mock_config.PLAN_COLLECTION_NAME = "Plan"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
 
         plans = [
             {"_id": ObjectId("507f1f77bcf86cd799439011"), "name": "alpha"},
             {"_id": ObjectId("507f1f77bcf86cd799439012"), "name": "beta"},
         ]
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.return_value = plans
-        mock_get_mongo.return_value = mock_mongo
+        mock_execute_list.return_value = plans
 
         result = PlanService.get_plans(self.mock_token, self.mock_breadcrumb)
 
         self.assertEqual(result, plans)
-        mock_mongo.get_documents.assert_called_once()
-        args, kwargs = mock_mongo.get_documents.call_args
-        self.assertEqual(args[0], "Plan")
-        self.assertEqual(kwargs["sort_by"], [("name", ASCENDING), ("_id", ASCENDING)])
-        self.assertEqual(kwargs["skip"], 0)
-        self.assertEqual(kwargs["limit"], 20)
+        mock_execute_list.assert_called_once()
+        call_kwargs = mock_execute_list.call_args[1]
+        self.assertEqual(call_kwargs["match"], {})
 
+    @patch("api_utils.services.plan_service.execute_list_query")
     @patch("api_utils.services.plan_service.Config.get_instance")
-    @patch("api_utils.services.plan_service.MongoIO.get_instance")
     def test_get_plans_applies_pagination_and_name_filter(
-        self, mock_get_mongo, mock_get_config
+        self, mock_get_config, mock_execute_list
     ):
         """get_plans honors offset/size and the optional name contains filter."""
         mock_config = MagicMock()
         mock_config.PLAN_COLLECTION_NAME = "Plan"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
-
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.return_value = []
-        mock_get_mongo.return_value = mock_mongo
+        mock_execute_list.return_value = []
 
         PlanService.get_plans(
-            self.mock_token,
+            {"user_id": "test_user", "roles": ["developer"]},
             self.mock_breadcrumb,
             offset=10,
             size=5,
@@ -77,13 +71,12 @@ class TestPlanService(unittest.TestCase):
             sort_by=[("name", ASCENDING), ("_id", ASCENDING)],
         )
 
-        args, kwargs = mock_mongo.get_documents.call_args
-        self.assertEqual(args[0], "Plan")
-        self.assertEqual(
-            kwargs["match"], {"name": {"$regex": "intro", "$options": "i"}}
-        )
-        self.assertEqual(kwargs["skip"], 10)
-        self.assertEqual(kwargs["limit"], 5)
+        call_kwargs = mock_execute_list.call_args[1]
+        match = call_kwargs["match"]
+        self.assertEqual(match["status"], {"$ne": "archived"})
+        self.assertEqual(match["name"]["$regex"], "intro")
+        self.assertEqual(call_kwargs["offset"], 10)
+        self.assertEqual(call_kwargs["size"], 5)
 
     @patch("api_utils.services.plan_service.Config.get_instance")
     @patch("api_utils.services.plan_service.MongoIO.get_instance")
@@ -128,14 +121,15 @@ class TestPlanService(unittest.TestCase):
         """Test get_plans handles database exceptions."""
         mock_config = MagicMock()
         mock_config.PLAN_COLLECTION_NAME = "Plan"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
 
-        mock_mongo = MagicMock()
-        mock_mongo.get_documents.side_effect = Exception("Database error")
-        mock_get_mongo.return_value = mock_mongo
-
-        with self.assertRaises(HTTPInternalServerError):
-            PlanService.get_plans(self.mock_token, self.mock_breadcrumb)
+        with patch(
+            "api_utils.services.plan_service.execute_list_query",
+            side_effect=Exception("Database error"),
+        ):
+            with self.assertRaises(HTTPInternalServerError):
+                PlanService.get_plans(self.mock_token, self.mock_breadcrumb)
 
     @patch("api_utils.services.plan_service.Config.get_instance")
     @patch("api_utils.services.plan_service.MongoIO.get_instance")

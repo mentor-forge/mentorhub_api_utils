@@ -3,9 +3,7 @@ Unit tests for the shared Profile service.
 
 The shared class is consume-only plus the global ``create_profile`` POST:
 get-by-token, plain get-by-id, and a paginated list. Mentor Dashboard enrich
-lives on the Mentor API subclass and is not exercised here. Outbound RBAC
-filtering (archived rows, customer/mentor scope) arrives in R082, so these
-tests assert an unscoped base match.
+lives on the Mentor API subclass and is not exercised here.
 """
 
 import copy
@@ -18,6 +16,7 @@ from api_utils.flask_utils.exceptions import HTTPNotFound
 MENTOR_ID = ObjectId("507f1f77bcf86cd799439001")
 MENTEE_1_ID = ObjectId("507f1f77bcf86cd799439011")
 MENTEE_2_ID = ObjectId("507f1f77bcf86cd799439012")
+OTHER_PROFILE_ID = ObjectId("507f1f77bcf86cd799439099")
 CUSTOMER_ID = ObjectId("507f1f77bcf86cd7994390cc")
 NEW_PROFILE_ID = ObjectId("507f1f77bcf86cd7994390dd")
 
@@ -28,6 +27,19 @@ def _make_config():
     mock_config.ROLE_MENTOR = "mentor"
     mock_config.ROLE_ADMIN = "admin"
     return mock_config
+
+
+def _mentor_token():
+    return {
+        "user_id": "mike",
+        "roles": ["mentor"],
+        "profile_id": str(MENTOR_ID),
+        "mentor_id": str(MENTOR_ID),
+    }
+
+
+def _admin_token():
+    return {"user_id": "admin", "roles": ["admin"]}
 
 
 def _capture_create(mock_mongo, new_id):
@@ -52,7 +64,7 @@ class TestProfileService(unittest.TestCase):
 
     def setUp(self):
         """Set up the test fixture."""
-        self.mock_token = {"user_id": "mike", "roles": ["mentor"]}
+        self.mock_token = _mentor_token()
         self.mock_breadcrumb = {
             "at_time": "2024-01-01T00:00:00Z",
             "by_user": "mike",
@@ -121,13 +133,13 @@ class TestProfileService(unittest.TestCase):
         )
 
         self.assertEqual(result, documents)
-        mock_execute_list_query.assert_called_once_with(
-            "Profile",
-            match={},
-            sort_by=[("name", 1), ("_id", 1)],
-            offset=10,
-            size=5,
-        )
+        match = mock_execute_list_query.call_args.kwargs["match"]
+        self.assertEqual(match["status"], {"$ne": "archived"})
+        self.assertIn("$or", match)
+        mock_execute_list_query.assert_called_once()
+        call_kwargs = mock_execute_list_query.call_args[1]
+        self.assertEqual(call_kwargs["offset"], 10)
+        self.assertEqual(call_kwargs["size"], 5)
 
     @patch("api_utils.services.profile_service.execute_list_query")
     @patch("api_utils.services.profile_service.Config.get_instance")
@@ -147,13 +159,12 @@ class TestProfileService(unittest.TestCase):
         )
 
         match = mock_execute_list_query.call_args.kwargs["match"]
-        self.assertEqual(
-            match,
-            {
-                "name": {"$regex": "dan", "$options": "i"},
-                "status": {"$in": ["active", "provisioned"]},
-            },
-        )
+        and_clauses = match["$and"]
+        status_clauses = [c["status"] for c in and_clauses if "status" in c]
+        self.assertEqual(status_clauses[0], {"$ne": "archived"})
+        self.assertEqual(status_clauses[1], {"$in": ["active", "provisioned"]})
+        name_clause = next(c for c in and_clauses if "name" in c)
+        self.assertEqual(name_clause["name"]["$regex"], "dan")
 
     @patch("api_utils.services.profile_service.execute_list_query")
     @patch("api_utils.services.profile_service.Config.get_instance")
@@ -175,10 +186,15 @@ class TestProfileService(unittest.TestCase):
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
     def test_get_profile_returns_plain_document(self, mock_get_mongo, mock_get_config):
-        """get_profile returns the document itself, not a composite."""
+        """get_profile returns the document when it is in outbound scope."""
         mock_get_config.return_value = _make_config()
 
-        profile_doc = {"_id": MENTEE_1_ID, "name": "daniel"}
+        profile_doc = {
+            "_id": MENTEE_1_ID,
+            "name": "daniel",
+            "mentor_id": MENTOR_ID,
+            "status": "active",
+        }
         mock_mongo = MagicMock()
         mock_mongo.get_document.return_value = profile_doc
         mock_get_mongo.return_value = mock_mongo
@@ -189,8 +205,69 @@ class TestProfileService(unittest.TestCase):
 
         self.assertEqual(result, profile_doc)
         mock_mongo.get_document.assert_called_once_with("Profile", str(MENTEE_1_ID))
-        # No mentee/encounter composite means no cross-collection reads.
         mock_mongo.get_documents.assert_not_called()
+
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    @patch("api_utils.services.profile_service.MongoIO.get_instance")
+    def test_get_profile_hides_other_profiles(self, mock_get_mongo, mock_get_config):
+        """get_profile of someone else's profile returns 404."""
+        mock_get_config.return_value = _make_config()
+
+        profile_doc = {
+            "_id": OTHER_PROFILE_ID,
+            "name": "stranger",
+            "status": "active",
+        }
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = profile_doc
+        mock_get_mongo.return_value = mock_mongo
+
+        with self.assertRaises(HTTPNotFound):
+            ProfileService.get_profile(
+                str(OTHER_PROFILE_ID), self.mock_token, self.mock_breadcrumb
+            )
+
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    @patch("api_utils.services.profile_service.MongoIO.get_instance")
+    def test_get_profile_admin_sees_archived(self, mock_get_mongo, mock_get_config):
+        """Admin callers may fetch archived profiles."""
+        mock_get_config.return_value = _make_config()
+
+        profile_doc = {
+            "_id": OTHER_PROFILE_ID,
+            "name": "stranger",
+            "status": "archived",
+        }
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = profile_doc
+        mock_get_mongo.return_value = mock_mongo
+
+        result = ProfileService.get_profile(
+            str(OTHER_PROFILE_ID), _admin_token(), self.mock_breadcrumb
+        )
+
+        self.assertEqual(result["status"], "archived")
+
+    @patch("api_utils.services.profile_service.execute_list_query")
+    @patch("api_utils.services.profile_service.Config.get_instance")
+    def test_get_profiles_status_archived_search_still_filters(
+        self, mock_get_config, mock_execute_list_query
+    ):
+        """Non-admin list search for archived still applies outbound archived filter."""
+        mock_get_config.return_value = _make_config()
+        mock_execute_list_query.return_value = []
+
+        ProfileService.get_profiles(
+            self.mock_token,
+            self.mock_breadcrumb,
+            filters={"status": ["archived"]},
+        )
+
+        match = mock_execute_list_query.call_args.kwargs["match"]
+        and_clauses = match["$and"]
+        status_clauses = [c["status"] for c in and_clauses if "status" in c]
+        self.assertEqual(status_clauses[0], {"$ne": "archived"})
+        self.assertEqual(status_clauses[1], {"$in": ["archived"]})
 
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")

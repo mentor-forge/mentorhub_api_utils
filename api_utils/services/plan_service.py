@@ -17,12 +17,13 @@ from api_utils.mongo_utils.list_query import (
     build_sort_by,
     execute_list_query,
 )
+from api_utils.services.rbac import build_outbound_match, require_outbound
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Plan remains a mentor-only local domain, but adopts the shared header
-# pagination + sort_by/order + filter conventions for list consistency.
+ARCHIVED_STATUS = "archived"
+
 PLAN_LIST_FILTERS = {
     "name": {"type": "contains", "field": "name"},
 }
@@ -38,14 +39,19 @@ class PlanService:
     Service class for Plan domain operations (read-only in shared api_utils).
 
     Handles:
-    - RBAC authorization checks (mentor-or-admin read)
+    - Outbound RBAC visibility on shared GET/list
     - MongoDB operations via MongoIO singleton
     """
 
     @classmethod
     def _check_permission(cls, token, operation):
-        """Authenticated read; mentor-or-admin enforced by controlling API routes."""
+        """Authenticated read; outbound filtering applies separately."""
         pass
+
+    @classmethod
+    def _outbound_match(cls, token):
+        """Catalog consume: non-admin callers see non-archived plans only."""
+        return build_outbound_match(token, [{"status": {"$ne": ARCHIVED_STATUS}}])
 
     @classmethod
     def get_plans(
@@ -70,7 +76,9 @@ class PlanService:
             cls._check_permission(token, "read")
             config = Config.get_instance()
 
-            match = build_match_filter({}, filters or {}, PLAN_LIST_FILTERS)
+            match = build_match_filter(
+                cls._outbound_match(token), filters or {}, PLAN_LIST_FILTERS
+            )
             if sort_by is None:
                 default = PLAN_LIST_ORDER["default"]
                 sort_by = build_sort_by(
@@ -106,7 +114,7 @@ class PlanService:
             dict: The plan document
 
         Raises:
-            HTTPNotFound: If plan is not found
+            HTTPNotFound: If plan is not found or not visible
         """
         try:
             cls._check_permission(token, "read")
@@ -114,8 +122,11 @@ class PlanService:
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
             plan = mongo.get_document(config.PLAN_COLLECTION_NAME, plan_id)
-            if plan is None:
-                raise HTTPNotFound(f"Plan { plan_id} not found")
+            require_outbound(
+                plan,
+                cls._outbound_match(token),
+                not_found_message=f"Plan {plan_id} not found",
+            )
 
             logger.info(f"Retrieved plan { plan_id} for user {token.get('user_id')}")
             return plan

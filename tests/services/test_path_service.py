@@ -31,6 +31,7 @@ class TestPathService(unittest.TestCase):
         """Test successful retrieval of paths as a paginated list."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
 
         mock_execute_list.return_value = [
@@ -53,6 +54,7 @@ class TestPathService(unittest.TestCase):
         """Test get_path returns the raw path document with resource ids."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
 
         resource_id = "507f1f77bcf86cd799439011"
@@ -87,6 +89,7 @@ class TestPathService(unittest.TestCase):
         """Test get_path handles paths with no modules."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
 
         mock_mongo = MagicMock()
@@ -103,6 +106,7 @@ class TestPathService(unittest.TestCase):
         """Test get_path raises HTTPNotFound when document not found."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
 
         mock_mongo = MagicMock()
@@ -119,6 +123,7 @@ class TestPathService(unittest.TestCase):
         """Test get_paths handles exceptions properly."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
         mock_execute_list.side_effect = Exception("Database error")
 
@@ -131,6 +136,7 @@ class TestPathService(unittest.TestCase):
         """Test get_path handles exceptions properly."""
         mock_config = MagicMock()
         mock_config.PATH_COLLECTION_NAME = "Path"
+        mock_config.ROLE_ADMIN = "admin"
         mock_get_config.return_value = mock_config
 
         mock_mongo = MagicMock()
@@ -140,10 +146,9 @@ class TestPathService(unittest.TestCase):
         with self.assertRaises(HTTPInternalServerError):
             PathService.get_path("123", self.mock_token, self.mock_breadcrumb)
 
-    def test_check_permission_placeholder(self):
-        """Test that _check_permission is a placeholder that allows all operations."""
+    def test_check_permission_requires_token_only(self):
+        """Shared reads require a valid token; outbound filtering is separate."""
         PathService._check_permission(self.mock_token, "read")
-        self.assertTrue(True)
 
 
 if __name__ == "__main__":
