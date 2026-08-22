@@ -61,7 +61,7 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==0.7.1`). Releasing is two steps:
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==1.0.0`). Releasing is two steps:
 - Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
 - After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
 
@@ -96,14 +96,58 @@ The full shared surface is: `AggregationService`, `EncounterService`,
 #### Data-boundary contract
 
 One service domain **controls** a collection; any domain may **consume**
-(GET) or **create** immutable documents. Shared services own GET / list
-(RBAC `base_match` from the token) plus the global POSTs
-`EventService.create_event`, `NotificationService.create_notification`,
-and `ProfileService.create_profile`. Domain APIs **extend** these classes
-(`class JourneyService(api_utils.services.JourneyService)`) and own enrich,
-control POST, PATCH / PUT, and mutate for collections they **control**.
-Methods are `@classmethod` so subclass overrides dispatch. Routes import
-the local API subclass, not `api_utils.services` directly.
+(GET) or **create** immutable documents.
+
+**Shared services** (this package) own:
+
+- **Outbound** GET / list — every shared GET and list applies outbound
+  filters from the caller token: admin is unrestricted; non-admin callers
+  are scoped by token `profile_id` / `customer_id` / `mentor_id` and
+  `status != archived`. Get-by-id uses the same filter after fetch (404
+  when the document is hidden, so ids are not leaked via 403). Helpers live
+  in `api_utils.services.rbac` (`build_outbound_match`, `require_outbound`,
+  …).
+- **Global POST** — any journey domain may create immutable documents via
+  `EventService.create_event`, `NotificationService.create_notification`,
+  and `ProfileService.create_profile`.
+
+**Domain API subclasses** extend the shared class and own enrich, control
+POST, PATCH / PUT, and mutate for collections they **control**, plus
+**inbound** who-may-write checks (who may PATCH or mutate — separate from
+outbound visibility). Methods are `@classmethod` so subclass overrides
+dispatch. **Routes import the local subclass**, not `api_utils.services`
+directly.
+
+```python
+# src/services/journey_service.py
+from api_utils.services import JourneyService as SharedJourneyService
+
+class JourneyService(SharedJourneyService):
+    @classmethod
+    def _check_permission(cls, token, operation, journey_id=None):
+        ...  # inbound: who may PATCH / mutate (not outbound)
+
+    @classmethod
+    def update_journey(cls, journey_id, data, token, breadcrumb):
+        cls._check_permission(token, "update", journey_id=journey_id)
+        ...
+
+# src/routes/journey_routes.py
+from src.services.journey_service import JourneyService
+```
+
+#### Downstream planning artifacts
+
+Domain API repos should pin **`api-utils==1.0.0`** and follow the issue
+artifacts in this repo's `tasks/` folder (not orchestrated from here):
+
+- [`tasks/ISSUE.journey_api.md`](tasks/ISSUE.journey_api.md) — Journey
+  control POST/PATCH/mutate on the Mentee API subclass
+- [`tasks/ISSUE.mentorhub_admin_api.profile_create.md`](tasks/ISSUE.mentorhub_admin_api.profile_create.md)
+- [`tasks/ISSUE.mentorhub_customer_api.profile_control.md`](tasks/ISSUE.mentorhub_customer_api.profile_control.md)
+- [`tasks/ISSUE.mentorhub_discovery_api.notification_control.md`](tasks/ISSUE.mentorhub_discovery_api.notification_control.md)
+- [`tasks/ISSUE.mentorhub_mentor_api.extend_shared_services.md`](tasks/ISSUE.mentorhub_mentor_api.extend_shared_services.md)
+- [`tasks/ISSUE.mentorhub_mentee_api.extend_shared_services.md`](tasks/ISSUE.mentorhub_mentee_api.extend_shared_services.md)
 
 Collection names, roles, and event types are inline `Config` constants
 (`PROFILE_COLLECTION_NAME`, `ROLE_ADMIN`, `EVENT_TYPE_LOGIN`, …) assigned at
