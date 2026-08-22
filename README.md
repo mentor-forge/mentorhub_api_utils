@@ -93,6 +93,18 @@ The full shared surface is: `AggregationService`, `EncounterService`,
 `NoteService`, `NotificationService`, `PathService`, `PlanService`,
 `ProfileService`, and `ResourceService`.
 
+#### Data-boundary contract
+
+One service domain **controls** a collection; any domain may **consume**
+(GET) or **create** immutable documents. Shared services own GET / list
+(RBAC `base_match` from the token) plus the global POSTs
+`EventService.create_event`, `NotificationService.create_notification`,
+and `ProfileService.create_profile`. Domain APIs **extend** these classes
+(`class JourneyService(api_utils.services.JourneyService)`) and own enrich,
+control POST, PATCH / PUT, and mutate for collections they **control**.
+Methods are `@classmethod` so subclass overrides dispatch. Routes import
+the local API subclass, not `api_utils.services` directly.
+
 Collection names, roles, and event types are inline `Config` constants
 (`PROFILE_COLLECTION_NAME`, `ROLE_ADMIN`, `EVENT_TYPE_LOGIN`, …) assigned at
 construction — not loaded from `config_strings` or overwritten by

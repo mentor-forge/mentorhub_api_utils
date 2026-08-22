@@ -30,8 +30,8 @@ class EncounterService:
     - Business logic for Encounter domain
     """
 
-    @staticmethod
-    def _check_permission(token, operation, breadcrumb, encounter=None):
+    @classmethod
+    def _check_permission(cls, token, operation, breadcrumb, encounter=None):
         """
         Authorize an operation for the Encounter domain.
 
@@ -76,8 +76,8 @@ class EncounterService:
                     "Only the owning mentor or an admin may update this encounter"
                 )
 
-    @staticmethod
-    def _validate_update_data(data):
+    @classmethod
+    def _validate_update_data(cls, data):
         """
         Validate update data to prevent security issues.
 
@@ -93,8 +93,8 @@ class EncounterService:
             if field in data:
                 raise HTTPForbidden(f"Cannot update {field} field")
 
-    @staticmethod
-    def _build_agenda_from_plan(plan):
+    @classmethod
+    def _build_agenda_from_plan(cls, plan):
         """
         Derive the encounter ``agenda`` from a Plan's checklist.
 
@@ -110,8 +110,8 @@ class EncounterService:
             return []
         return [{"step": step, "checked": False} for step in steps]
 
-    @staticmethod
-    def create_encounter(data, token, breadcrumb):
+    @classmethod
+    def create_encounter(cls, data, token, breadcrumb):
         """
         Create a new encounter document.
 
@@ -131,7 +131,7 @@ class EncounterService:
             str: The ID of the created encounter document
         """
         try:
-            EncounterService._check_permission(token, "create", breadcrumb)
+            cls._check_permission(token, "create", breadcrumb)
 
             # Look up the referenced Plan via PlanService (no direct
             # cross-collection access). A missing Plan raises HTTPNotFound.
@@ -139,7 +139,7 @@ class EncounterService:
 
             # Auto-fill agenda from the Plan checklist, overriding any
             # client-supplied agenda.
-            data["agenda"] = EncounterService._build_agenda_from_plan(plan)
+            data["agenda"] = cls._build_agenda_from_plan(plan)
 
             # Remove _id if present (MongoDB will generate it)
             if "_id" in data:
@@ -169,8 +169,8 @@ class EncounterService:
             logger.error(f"Error creating encounter: {error_msg}")
             raise HTTPInternalServerError(f"Failed to create encounter: {error_msg}")
 
-    @staticmethod
-    def _normalize_mentee_id(mentee_id):
+    @classmethod
+    def _normalize_mentee_id(cls, mentee_id):
         """
         Normalize a mentee id for matching against ``Encounter.mentee_id``.
 
@@ -187,8 +187,8 @@ class EncounterService:
         except (InvalidId, TypeError):
             return mentee_id
 
-    @staticmethod
-    def get_recent_encounter(mentee_id, token, breadcrumb):
+    @classmethod
+    def get_recent_encounter(cls, mentee_id, token, breadcrumb):
         """
         Return a summary of a mentee's most recent Encounter, or ``None``.
 
@@ -205,13 +205,13 @@ class EncounterService:
             dict | None: The most recent encounter summary, or ``None`` when the
             mentee has no encounters.
         """
-        EncounterService._check_permission(token, "read", breadcrumb)
+        cls._check_permission(token, "read", breadcrumb)
 
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
         encounters = mongo.get_documents(
             config.ENCOUNTER_COLLECTION_NAME,
-            match={"mentee_id": EncounterService._normalize_mentee_id(mentee_id)},
+            match={"mentee_id": cls._normalize_mentee_id(mentee_id)},
             sort_by=[("date", DESCENDING)],
         )
         if not encounters:
@@ -225,8 +225,10 @@ class EncounterService:
             "summary": encounter.get("summary"),
         }
 
-    @staticmethod
-    def get_encounters_for_mentee(mentee_id, token, breadcrumb, offset=None, size=None):
+    @classmethod
+    def get_encounters_for_mentee(
+        cls, mentee_id, token, breadcrumb, offset=None, size=None
+    ):
         """
         Return a mentee's Encounter documents, most recent first.
 
@@ -250,13 +252,13 @@ class EncounterService:
         Returns:
             list[dict]: The mentee's Encounter documents, most recent first.
         """
-        EncounterService._check_permission(token, "read", breadcrumb)
+        cls._check_permission(token, "read", breadcrumb)
 
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
 
         query_kwargs = {
-            "match": {"mentee_id": EncounterService._normalize_mentee_id(mentee_id)},
+            "match": {"mentee_id": cls._normalize_mentee_id(mentee_id)},
             "sort_by": [("date", DESCENDING)],
         }
         if offset is not None and size is not None:
@@ -273,8 +275,8 @@ class EncounterService:
         )
         return encounters
 
-    @staticmethod
-    def get_encounter(encounter_id, token, breadcrumb):
+    @classmethod
+    def get_encounter(cls, encounter_id, token, breadcrumb):
         """
         Retrieve a specific encounter document by ID.
 
@@ -290,7 +292,7 @@ class EncounterService:
             HTTPNotFound: If encounter is not found
         """
         try:
-            EncounterService._check_permission(token, "read", breadcrumb)
+            cls._check_permission(token, "read", breadcrumb)
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
@@ -312,8 +314,8 @@ class EncounterService:
                 f"Failed to retrieve encounter { encounter_id}"
             )
 
-    @staticmethod
-    def update_encounter(encounter_id, data, token, breadcrumb):
+    @classmethod
+    def update_encounter(cls, encounter_id, data, token, breadcrumb):
         """
         Update a encounter document.
 
@@ -333,7 +335,7 @@ class EncounterService:
         try:
             # Gate on role before any datastore access so unauthorized callers
             # never trigger a read.
-            EncounterService._check_permission(token, "update", breadcrumb)
+            cls._check_permission(token, "update", breadcrumb)
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
@@ -347,11 +349,9 @@ class EncounterService:
                 raise HTTPNotFound(f"Encounter { encounter_id} not found")
 
             # Admins may update any encounter; other mentors must own it.
-            EncounterService._check_permission(
-                token, "update", breadcrumb, encounter=encounter
-            )
+            cls._check_permission(token, "update", breadcrumb, encounter=encounter)
 
-            EncounterService._validate_update_data(data)
+            cls._validate_update_data(data)
 
             # Build update data with $set operator (excluding restricted fields)
             restricted_fields = ["_id", "created", "saved"]

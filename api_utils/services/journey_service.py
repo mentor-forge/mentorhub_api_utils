@@ -38,8 +38,8 @@ RESTRICTED_UPDATE_FIELDS = [
 class JourneyService:
     """Service class for Journey domain operations."""
 
-    @staticmethod
-    def _check_permission(token, operation, journey_id=None):
+    @classmethod
+    def _check_permission(cls, token, operation, journey_id=None):
         if operation == "read":
             return
         if operation == "update":
@@ -58,15 +58,15 @@ class JourneyService:
                 return
             raise HTTPForbidden("Mentee role required to complete resources")
 
-    @staticmethod
-    def _validate_object_id(value, field_name):
+    @classmethod
+    def _validate_object_id(cls, value, field_name):
         try:
             ObjectId(value)
         except (InvalidId, TypeError):
             raise HTTPBadRequest(f"{field_name} must be a valid MongoDB ObjectId")
 
-    @staticmethod
-    def _oid(value):
+    @classmethod
+    def _oid(cls, value):
         """Coerce an id to its canonical BSON ``ObjectId`` form.
 
         Inbound ids arrive as strings while stored ids are ``ObjectId``;
@@ -77,14 +77,14 @@ class JourneyService:
         """
         return ObjectId(value)
 
-    @staticmethod
-    def _validate_update_data(data):
+    @classmethod
+    def _validate_update_data(cls, data):
         for field in RESTRICTED_UPDATE_FIELDS:
             if field in data:
                 raise HTTPForbidden(f"Cannot update {field} field")
 
-    @staticmethod
-    def _clone_template(profile_id, breadcrumb):
+    @classmethod
+    def _clone_template(cls, profile_id, breadcrumb):
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
         template = mongo.get_document(
@@ -113,10 +113,10 @@ class JourneyService:
         logger.info(f"Created journey {profile_id} from template for user {profile_id}")
         return created
 
-    @staticmethod
-    def get_my_journey(token, breadcrumb):
+    @classmethod
+    def get_my_journey(cls, token, breadcrumb):
         try:
-            JourneyService._check_permission(token, "read")
+            cls._check_permission(token, "read")
             profile_id = token.get("profile_id")
             if not profile_id:
                 raise HTTPBadRequest("profile_id is required on token")
@@ -130,21 +130,21 @@ class JourneyService:
                 )
                 return journey
 
-            return JourneyService._clone_template(profile_id, breadcrumb)
+            return cls._clone_template(profile_id, breadcrumb)
         except (HTTPBadRequest, HTTPForbidden, HTTPNotFound):
             raise
         except Exception as e:
             logger.error(f"Error retrieving journey for profile {profile_id}: {e}")
             raise HTTPInternalServerError("Failed to retrieve journey")
 
-    @staticmethod
-    def get_my_journey_detail(token, breadcrumb):
+    @classmethod
+    def get_my_journey_detail(cls, token, breadcrumb):
         try:
             profile_id = token.get("profile_id")
             if not profile_id:
                 raise HTTPBadRequest("profile_id is required on token")
 
-            journey = JourneyService.get_my_journey(token, breadcrumb)
+            journey = cls.get_my_journey(token, breadcrumb)
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
@@ -165,10 +165,10 @@ class JourneyService:
             )
             raise HTTPInternalServerError("Failed to retrieve journey detail")
 
-    @staticmethod
-    def get_journey(journey_id, token, breadcrumb):
+    @classmethod
+    def get_journey(cls, journey_id, token, breadcrumb):
         try:
-            JourneyService._check_permission(token, "read")
+            cls._check_permission(token, "read")
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
             journey = mongo.get_document(config.JOURNEY_COLLECTION_NAME, journey_id)
@@ -181,10 +181,10 @@ class JourneyService:
             logger.error(f"Error retrieving journey {journey_id}: {e}")
             raise HTTPInternalServerError(f"Failed to retrieve journey {journey_id}")
 
-    @staticmethod
-    def create_journey(data, token, breadcrumb):
+    @classmethod
+    def create_journey(cls, data, token, breadcrumb):
         try:
-            JourneyService._check_permission(token, "create")
+            cls._check_permission(token, "create")
             if "_id" in data:
                 del data["_id"]
             data["created"] = breadcrumb
@@ -201,11 +201,11 @@ class JourneyService:
             logger.error(f"Error creating journey: {e}")
             raise HTTPInternalServerError(f"Failed to create journey: {e}")
 
-    @staticmethod
-    def update_journey(journey_id, data, token, breadcrumb):
+    @classmethod
+    def update_journey(cls, journey_id, data, token, breadcrumb):
         try:
-            JourneyService._check_permission(token, "update", journey_id=journey_id)
-            JourneyService._validate_update_data(data)
+            cls._check_permission(token, "update", journey_id=journey_id)
+            cls._validate_update_data(data)
 
             set_data = {
                 k: v for k, v in data.items() if k not in RESTRICTED_UPDATE_FIELDS
@@ -230,26 +230,26 @@ class JourneyService:
             logger.error(f"Error updating journey {journey_id}: {e}")
             raise HTTPInternalServerError(f"Failed to update journey {journey_id}")
 
-    @staticmethod
-    def _resource_id_in_next(next_modules, resource_id):
-        target = JourneyService._oid(resource_id)
+    @classmethod
+    def _resource_id_in_next(cls, next_modules, resource_id):
+        target = cls._oid(resource_id)
         for module in next_modules:
             for topic in module.get("topics", []):
                 for rid in topic.get("resources", []):
-                    if JourneyService._oid(rid) == target:
+                    if cls._oid(rid) == target:
                         return True
         return False
 
-    @staticmethod
-    def _remove_resource_from_next(next_modules, resource_id):
-        target = JourneyService._oid(resource_id)
+    @classmethod
+    def _remove_resource_from_next(cls, next_modules, resource_id):
+        target = cls._oid(resource_id)
         found = False
         new_modules = []
         for module in next_modules:
             new_topics = []
             for topic in module.get("topics", []):
                 resources = topic.get("resources", [])
-                kept = [r for r in resources if JourneyService._oid(r) != target]
+                kept = [r for r in resources if cls._oid(r) != target]
                 if len(kept) != len(resources):
                     found = True
                 if kept:
@@ -262,29 +262,29 @@ class JourneyService:
                 new_modules.append(module_copy)
         return found, new_modules
 
-    @staticmethod
-    def _find_now_entry(now_items, resource):
+    @classmethod
+    def _find_now_entry(cls, now_items, resource):
         # now[].resource_id is a Resource id (ObjectId) per the Journey schema;
         # match on the id, not the resource name.
-        resource_oid = JourneyService._oid(resource["_id"])
+        resource_oid = cls._oid(resource["_id"])
         for index, item in enumerate(now_items):
             rid = item.get("resource_id")
-            if rid is not None and JourneyService._oid(rid) == resource_oid:
+            if rid is not None and cls._oid(rid) == resource_oid:
                 return index, item
         return None, None
 
-    @staticmethod
-    def _event_token(token, resource_id, journey_id):
+    @classmethod
+    def _event_token(cls, token, resource_id, journey_id):
         event_token = dict(token)
         event_token["resource_id"] = resource_id
         event_token["journey_id"] = journey_id
         return event_token
 
-    @staticmethod
-    def advance_resource(resource_id, token, breadcrumb):
+    @classmethod
+    def advance_resource(cls, resource_id, token, breadcrumb):
         try:
-            JourneyService._check_permission(token, "mutate")
-            JourneyService._validate_object_id(resource_id, "resource_id")
+            cls._check_permission(token, "mutate")
+            cls._validate_object_id(resource_id, "resource_id")
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
@@ -292,16 +292,16 @@ class JourneyService:
             if resource is None:
                 raise HTTPNotFound(f"Resource {resource_id} not found")
 
-            journey = JourneyService.get_my_journey(token, breadcrumb)
+            journey = cls.get_my_journey(token, breadcrumb)
             journey_id = str(journey["_id"])
             next_modules = journey.get("next", [])
 
-            if not JourneyService._resource_id_in_next(next_modules, resource_id):
+            if not cls._resource_id_in_next(next_modules, resource_id):
                 raise HTTPNotFound(
                     f"Resource {resource_id} not found in journey next scope"
                 )
 
-            found, updated_next = JourneyService._remove_resource_from_next(
+            found, updated_next = cls._remove_resource_from_next(
                 next_modules, resource_id
             )
             if not found:
@@ -339,7 +339,7 @@ class JourneyService:
 
             EventService.create_event(
                 {"type": config.EVENT_TYPE_ADVANCED},
-                JourneyService._event_token(token, resource_id, journey_id),
+                cls._event_token(token, resource_id, journey_id),
                 breadcrumb,
             )
 
@@ -351,11 +351,11 @@ class JourneyService:
             logger.error(f"Error advancing resource {resource_id}: {e}")
             raise HTTPInternalServerError(f"Failed to advance resource {resource_id}")
 
-    @staticmethod
-    def complete_resource(resource_id, data, token, breadcrumb):
+    @classmethod
+    def complete_resource(cls, resource_id, data, token, breadcrumb):
         try:
-            JourneyService._check_permission(token, "complete")
-            JourneyService._validate_object_id(resource_id, "resource_id")
+            cls._check_permission(token, "complete")
+            cls._validate_object_id(resource_id, "resource_id")
             data = data or {}
 
             mongo = MongoIO.get_instance()
@@ -364,11 +364,11 @@ class JourneyService:
             if resource is None:
                 raise HTTPNotFound(f"Resource {resource_id} not found")
 
-            journey = JourneyService.get_my_journey(token, breadcrumb)
+            journey = cls.get_my_journey(token, breadcrumb)
             journey_id = str(journey["_id"])
             now_items = copy.deepcopy(journey.get("now", []))
 
-            index, now_entry = JourneyService._find_now_entry(now_items, resource)
+            index, now_entry = cls._find_now_entry(now_items, resource)
             if index is None:
                 raise HTTPNotFound(
                     f"Resource {resource_id} not found in journey now scope"
@@ -418,7 +418,7 @@ class JourneyService:
             )
             EventService.create_event(
                 {"type": config.EVENT_TYPE_COMPLETED},
-                JourneyService._event_token(token, resource_id, journey_id),
+                cls._event_token(token, resource_id, journey_id),
                 breadcrumb,
             )
 
@@ -430,13 +430,13 @@ class JourneyService:
             logger.error(f"Error completing resource {resource_id}: {e}")
             raise HTTPInternalServerError(f"Failed to complete resource {resource_id}")
 
-    @staticmethod
-    def _path_id_in_later(later_items, path_id):
-        target = JourneyService._oid(path_id)
-        return any(JourneyService._oid(item) == target for item in later_items)
+    @classmethod
+    def _path_id_in_later(cls, later_items, path_id):
+        target = cls._oid(path_id)
+        return any(cls._oid(item) == target for item in later_items)
 
-    @staticmethod
-    def _module_to_next_module(module):
+    @classmethod
+    def _module_to_next_module(cls, module):
         next_module = {
             "name": module.get("name"),
             "description": module.get("description"),
@@ -455,14 +455,14 @@ class JourneyService:
             )
         return next_module
 
-    @staticmethod
-    def _module_name_in_next(next_modules, module_name):
+    @classmethod
+    def _module_name_in_next(cls, next_modules, module_name):
         return any(module.get("name") == module_name for module in next_modules)
 
-    @staticmethod
-    def _load_path_and_journey(path_id, token, breadcrumb):
-        JourneyService._check_permission(token, "mutate")
-        JourneyService._validate_object_id(path_id, "path_id")
+    @classmethod
+    def _load_path_and_journey(cls, path_id, token, breadcrumb):
+        cls._check_permission(token, "mutate")
+        cls._validate_object_id(path_id, "path_id")
 
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
@@ -470,20 +470,20 @@ class JourneyService:
         if path is None:
             raise HTTPNotFound(f"Path {path_id} not found")
 
-        journey = JourneyService.get_my_journey(token, breadcrumb)
+        journey = cls.get_my_journey(token, breadcrumb)
         journey_id = str(journey["_id"])
         later_items = journey.get("later", [])
 
-        if not JourneyService._path_id_in_later(later_items, path_id):
+        if not cls._path_id_in_later(later_items, path_id):
             raise HTTPNotFound(f"Path {path_id} not found in journey later scope")
 
         return mongo, config, path, journey, journey_id, later_items
 
-    @staticmethod
-    def promote_path_to_next(path_id, token, breadcrumb):
+    @classmethod
+    def promote_path_to_next(cls, path_id, token, breadcrumb):
         try:
             mongo, config, path, journey, journey_id, later_items = (
-                JourneyService._load_path_and_journey(path_id, token, breadcrumb)
+                cls._load_path_and_journey(path_id, token, breadcrumb)
             )
 
             path_modules = path.get("modules", [])
@@ -492,13 +492,11 @@ class JourneyService:
 
             next_modules = copy.deepcopy(journey.get("next", []))
             for module in path_modules:
-                next_modules.append(JourneyService._module_to_next_module(module))
+                next_modules.append(cls._module_to_next_module(module))
 
-            target_path_oid = JourneyService._oid(path_id)
+            target_path_oid = cls._oid(path_id)
             updated_later = [
-                item
-                for item in later_items
-                if JourneyService._oid(item) != target_path_oid
+                item for item in later_items if cls._oid(item) != target_path_oid
             ]
 
             set_data = {
@@ -523,11 +521,11 @@ class JourneyService:
             logger.error(f"Error promoting path {path_id} to next: {e}")
             raise HTTPInternalServerError(f"Failed to promote path {path_id} to next")
 
-    @staticmethod
-    def promote_module_to_next(path_id, module_name, token, breadcrumb):
+    @classmethod
+    def promote_module_to_next(cls, path_id, module_name, token, breadcrumb):
         try:
             mongo, config, path, journey, journey_id, _later_items = (
-                JourneyService._load_path_and_journey(path_id, token, breadcrumb)
+                cls._load_path_and_journey(path_id, token, breadcrumb)
             )
 
             if not module_name:
@@ -545,12 +543,12 @@ class JourneyService:
                 )
 
             next_modules = copy.deepcopy(journey.get("next", []))
-            if JourneyService._module_name_in_next(next_modules, module_name):
+            if cls._module_name_in_next(next_modules, module_name):
                 raise HTTPBadRequest(
                     f"Module {module_name!r} is already present in journey next scope"
                 )
 
-            next_modules.append(JourneyService._module_to_next_module(path_module))
+            next_modules.append(cls._module_to_next_module(path_module))
 
             set_data = {
                 "next": next_modules,
@@ -579,8 +577,8 @@ class JourneyService:
                 f"Failed to promote module {module_name!r} from path {path_id} to next"
             )
 
-    @staticmethod
-    def get_journey_progress(profile_id, token, breadcrumb):
+    @classmethod
+    def get_journey_progress(cls, profile_id, token, breadcrumb):
         """
         Count the resources in a mentee's active Learning Journey by scope.
 

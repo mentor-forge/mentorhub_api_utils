@@ -1,5 +1,23 @@
 """
 Shared domain service implementations for Mentor Hub APIs.
+
+Architecture (controls / creates / consumes)
+--------------------------------------------
+One service domain **controls** a collection; any domain may **consume**
+(GET) that collection or **create** immutable documents in it. Shared
+services therefore own:
+
+- GET / list with an RBAC ``base_match`` derived from the token
+- Global POSTs that any journey domain may issue:
+  ``EventService.create_event``,
+  ``NotificationService.create_notification``,
+  ``ProfileService.create_profile`` (added in R076)
+
+Domain API subclasses own enrich, control POST, PATCH / PUT, and mutate
+for collections that domain **controls**. They extend these classes
+(``class JourneyService(api_utils.services.JourneyService)``) so overrides
+of RBAC, enrich, and mutate dispatch through ``cls``. Routes import the
+local API subclass, not ``api_utils.services`` directly.
 """
 
 from api_utils.services.aggregation_service import AggregationService

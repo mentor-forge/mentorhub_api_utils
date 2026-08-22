@@ -30,8 +30,8 @@ class AggregationService:
     Service class for Resource_Aggregation domain operations.
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         if operation == "add_completion":
             roles = token.get("roles", [])
             if Config.get_instance().ROLE_MENTEE in roles:
@@ -40,8 +40,8 @@ class AggregationService:
         if operation == "add_hit":
             return
 
-    @staticmethod
-    def _parse_iso_duration(duration_str):
+    @classmethod
+    def _parse_iso_duration(cls, duration_str):
         if not duration_str or duration_str == ZERO_DURATION:
             return timedelta(0)
         match = _ISO_DURATION_PATTERN.match(duration_str)
@@ -65,8 +65,8 @@ class AggregationService:
             total_seconds += float(seconds)
         return timedelta(seconds=total_seconds)
 
-    @staticmethod
-    def _format_iso_duration(delta):
+    @classmethod
+    def _format_iso_duration(cls, delta):
         total_seconds = int(delta.total_seconds())
         if total_seconds <= 0:
             return ZERO_DURATION
@@ -81,22 +81,22 @@ class AggregationService:
             parts += f"{seconds}S"
         return parts
 
-    @staticmethod
-    def _add_durations(existing, addition):
-        total = AggregationService._parse_iso_duration(
+    @classmethod
+    def _add_durations(cls, existing, addition):
+        total = cls._parse_iso_duration(
             existing or ZERO_DURATION
-        ) + AggregationService._parse_iso_duration(addition or ZERO_DURATION)
-        return AggregationService._format_iso_duration(total)
+        ) + cls._parse_iso_duration(addition or ZERO_DURATION)
+        return cls._format_iso_duration(total)
 
-    @staticmethod
-    def _resource_object_id(resource_id):
+    @classmethod
+    def _resource_object_id(cls, resource_id):
         try:
             return ObjectId(resource_id)
         except (InvalidId, TypeError):
             raise HTTPBadRequest("resource_id must be a valid MongoDB ObjectId")
 
-    @staticmethod
-    def _find_aggregation(mongo, collection_name, resource_object_id):
+    @classmethod
+    def _find_aggregation(cls, mongo, collection_name, resource_object_id):
         aggregation = mongo.get_document(collection_name, str(resource_object_id))
         if aggregation is not None:
             return aggregation
@@ -106,8 +106,8 @@ class AggregationService:
         )
         return legacy_matches[0] if legacy_matches else None
 
-    @staticmethod
-    def _new_aggregation_document(resource_object_id, breadcrumb):
+    @classmethod
+    def _new_aggregation_document(cls, resource_object_id, breadcrumb):
         return {
             "_id": resource_object_id,
             "note_count": 0,
@@ -120,22 +120,18 @@ class AggregationService:
             "last_saved": breadcrumb,
         }
 
-    @staticmethod
-    def _get_or_create_aggregation(resource_id, token, breadcrumb):
-        resource_object_id = AggregationService._resource_object_id(resource_id)
+    @classmethod
+    def _get_or_create_aggregation(cls, resource_id, token, breadcrumb):
+        resource_object_id = cls._resource_object_id(resource_id)
 
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
         collection_name = config.RESOURCE_AGGREGATION_COLLECTION_NAME
-        aggregation = AggregationService._find_aggregation(
-            mongo, collection_name, resource_object_id
-        )
+        aggregation = cls._find_aggregation(mongo, collection_name, resource_object_id)
         if aggregation is not None:
             return aggregation
 
-        document = AggregationService._new_aggregation_document(
-            resource_object_id, breadcrumb
-        )
+        document = cls._new_aggregation_document(resource_object_id, breadcrumb)
         mongo.create_document(collection_name, document)
         created = mongo.get_document(collection_name, str(resource_object_id))
         logger.info(
@@ -144,8 +140,8 @@ class AggregationService:
         )
         return created
 
-    @staticmethod
-    def get_aggregation_for_resource(resource_id, token, breadcrumb):
+    @classmethod
+    def get_aggregation_for_resource(cls, resource_id, token, breadcrumb):
         """
         Retrieve aggregation metrics for a resource.
 
@@ -153,11 +149,11 @@ class AggregationService:
             dict or None: The aggregation document, or None if none exists
         """
         try:
-            resource_object_id = AggregationService._resource_object_id(resource_id)
+            resource_object_id = cls._resource_object_id(resource_id)
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
-            aggregation = AggregationService._find_aggregation(
+            aggregation = cls._find_aggregation(
                 mongo, config.RESOURCE_AGGREGATION_COLLECTION_NAME, resource_object_id
             )
 
@@ -176,8 +172,8 @@ class AggregationService:
                 f"Failed to retrieve aggregation for resource {resource_id}"
             )
 
-    @staticmethod
-    def get_aggregation_detail(resource_id, token, breadcrumb):
+    @classmethod
+    def get_aggregation_detail(cls, resource_id, token, breadcrumb):
         """
         Retrieve or create aggregation metrics and related notes for a resource.
 
@@ -185,9 +181,7 @@ class AggregationService:
             dict: {aggregation, notes}
         """
         try:
-            aggregation = AggregationService._get_or_create_aggregation(
-                resource_id, token, breadcrumb
-            )
+            aggregation = cls._get_or_create_aggregation(resource_id, token, breadcrumb)
 
             from api_utils.services.note_service import NoteService
 
@@ -210,17 +204,15 @@ class AggregationService:
                 f"Failed to retrieve aggregation detail for resource {resource_id}"
             )
 
-    @staticmethod
-    def add_hit(resource_id, token, breadcrumb):
+    @classmethod
+    def add_hit(cls, resource_id, token, breadcrumb):
         """
         Increment hit count for a resource aggregation.
 
         Any authenticated user may record a hit.
         """
         try:
-            aggregation = AggregationService._get_or_create_aggregation(
-                resource_id, token, breadcrumb
-            )
+            aggregation = cls._get_or_create_aggregation(resource_id, token, breadcrumb)
 
             set_data = {
                 "hits": aggregation.get("hits", 0) + 1,
@@ -248,18 +240,16 @@ class AggregationService:
                 f"Failed to record hit for resource {resource_id}"
             )
 
-    @staticmethod
-    def add_completion(resource_id, rating, note, duration, token, breadcrumb):
+    @classmethod
+    def add_completion(cls, resource_id, rating, note, duration, token, breadcrumb):
         """
         Increment completion counters for a resource aggregation.
 
         Mentee role required. Does not create Event documents.
         """
         try:
-            AggregationService._check_permission(token, "add_completion")
-            aggregation = AggregationService._get_or_create_aggregation(
-                resource_id, token, breadcrumb
-            )
+            cls._check_permission(token, "add_completion")
+            aggregation = cls._get_or_create_aggregation(resource_id, token, breadcrumb)
 
             completions = aggregation.get("completions", 0) + 1
             rating_count = aggregation.get("rating_count", 0)
@@ -290,9 +280,7 @@ class AggregationService:
                 "rating_count": rating_count,
                 "rating_sum": rating_sum,
                 "note_count": note_count,
-                "duration": AggregationService._add_durations(
-                    aggregation.get("duration"), duration
-                ),
+                "duration": cls._add_durations(aggregation.get("duration"), duration),
                 "last_saved": breadcrumb,
             }
 

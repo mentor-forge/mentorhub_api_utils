@@ -42,8 +42,8 @@ class PathService:
     - Business logic for Path domain (read-only)
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """
         Check if the user has permission to perform an operation.
 
@@ -59,8 +59,8 @@ class PathService:
         """
         pass
 
-    @staticmethod
-    def _collect_resource_ids(path):
+    @classmethod
+    def _collect_resource_ids(cls, path):
         resource_ids = []
         seen = set()
         for module in path.get("modules") or []:
@@ -72,8 +72,8 @@ class PathService:
                         resource_ids.append(resource_key)
         return resource_ids
 
-    @staticmethod
-    def _enrich_path_resources(path, resource_summaries):
+    @classmethod
+    def _enrich_path_resources(cls, path, resource_summaries):
         summary_by_id = {str(summary["_id"]): summary for summary in resource_summaries}
         enriched = dict(path)
         modules = []
@@ -94,8 +94,9 @@ class PathService:
         enriched["modules"] = modules
         return enriched
 
-    @staticmethod
+    @classmethod
     def get_paths(
+        cls,
         token,
         breadcrumb,
         offset=DEFAULT_OFFSET,
@@ -118,7 +119,7 @@ class PathService:
             list: Path documents
         """
         try:
-            PathService._check_permission(token, "read")
+            cls._check_permission(token, "read")
             config = Config.get_instance()
             match = build_match_filter({}, filters or {}, PATH_LIST_FILTERS)
             if sort_by is None:
@@ -142,8 +143,8 @@ class PathService:
             logger.error(f"Error retrieving paths: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve paths")
 
-    @staticmethod
-    def get_path(path_id, token, breadcrumb):
+    @classmethod
+    def get_path(cls, path_id, token, breadcrumb):
         """
         Retrieve a specific path document by ID with enriched resource summaries.
 
@@ -159,7 +160,7 @@ class PathService:
             HTTPNotFound: If path is not found
         """
         try:
-            PathService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
@@ -169,11 +170,11 @@ class PathService:
 
             from api_utils.services.resource_service import ResourceService
 
-            resource_ids = PathService._collect_resource_ids(path)
+            resource_ids = cls._collect_resource_ids(path)
             resource_summaries = ResourceService.get_resources_by_ids(
                 resource_ids, token, breadcrumb
             )
-            enriched_path = PathService._enrich_path_resources(path, resource_summaries)
+            enriched_path = cls._enrich_path_resources(path, resource_summaries)
 
             logger.info(f"Retrieved path { path_id} for user {token.get('user_id')}")
             return enriched_path

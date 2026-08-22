@@ -45,13 +45,13 @@ class EventService:
     Service class for Event domain operations.
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """Any authenticated user may create and read events."""
         pass
 
-    @staticmethod
-    def create_event(data, token, breadcrumb):
+    @classmethod
+    def create_event(cls, data, token, breadcrumb):
         """
         Create a new event document.
 
@@ -64,7 +64,7 @@ class EventService:
             dict: The created event document including _id
         """
         try:
-            EventService._check_permission(token, "create")
+            cls._check_permission(token, "create")
 
             if "_id" in data:
                 del data["_id"]
@@ -105,8 +105,9 @@ class EventService:
             logger.error(f"Error creating event: {error_msg}")
             raise HTTPInternalServerError(f"Failed to create event: {error_msg}")
 
-    @staticmethod
+    @classmethod
     def get_events(
+        cls,
         token,
         breadcrumb,
         offset=DEFAULT_OFFSET,
@@ -132,7 +133,7 @@ class EventService:
             list: Event documents
         """
         try:
-            EventService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             config = Config.get_instance()
             base_match = {}

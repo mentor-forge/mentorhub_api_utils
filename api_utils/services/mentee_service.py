@@ -40,13 +40,13 @@ class MenteeService:
     - Read-with-create-if-missing and update of the mentee-notes document
     """
 
-    @staticmethod
-    def _collection_name(config):
+    @classmethod
+    def _collection_name(cls, config):
         """Resolve the Mentee collection name from shared config."""
         return config.MENTEE_COLLECTION_NAME
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """
         Authorize an operation for the Mentee domain.
 
@@ -67,8 +67,8 @@ class MenteeService:
         if not allowed_roles.intersection(roles):
             raise HTTPForbidden("Mentor or admin role required to access mentee data")
 
-    @staticmethod
-    def _to_object_id(value, label):
+    @classmethod
+    def _to_object_id(cls, value, label):
         """
         Convert a string id to a BSON ``ObjectId``.
 
@@ -87,8 +87,8 @@ class MenteeService:
         except (InvalidId, TypeError):
             raise HTTPBadRequest(f"Invalid {label}: {value}")
 
-    @staticmethod
-    def _validate_update_data(data):
+    @classmethod
+    def _validate_update_data(cls, data):
         """
         Reject updates that target system-managed fields.
 
@@ -102,8 +102,8 @@ class MenteeService:
             if field in data:
                 raise HTTPForbidden(f"Cannot update {field} field")
 
-    @staticmethod
-    def _default_document(profile_object_id, breadcrumb):
+    @classmethod
+    def _default_document(cls, profile_object_id, breadcrumb):
         """
         Build a schema-valid default Mentee document for a Profile.
 
@@ -126,8 +126,8 @@ class MenteeService:
             "saved": breadcrumb,
         }
 
-    @staticmethod
-    def get_mentee(profile_id, token, breadcrumb):
+    @classmethod
+    def get_mentee(cls, profile_id, token, breadcrumb):
         """
         Retrieve the mentee-notes document for a Profile, creating it if needed.
 
@@ -148,12 +148,12 @@ class MenteeService:
             HTTPForbidden: If the caller does not hold the ``mentor`` role
         """
         try:
-            MenteeService._check_permission(token, "read")
-            profile_object_id = MenteeService._to_object_id(profile_id, "profile_id")
+            cls._check_permission(token, "read")
+            profile_object_id = cls._to_object_id(profile_id, "profile_id")
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
-            collection_name = MenteeService._collection_name(config)
+            collection_name = cls._collection_name(config)
 
             existing = mongo.get_documents(
                 collection_name, match={"profile_id": profile_object_id}
@@ -166,7 +166,7 @@ class MenteeService:
                 return existing[0]
 
             # Create-if-missing: persist a default document and return it.
-            document = MenteeService._default_document(profile_object_id, breadcrumb)
+            document = cls._default_document(profile_object_id, breadcrumb)
             mentee_id = mongo.create_document(collection_name, document)
             created = mongo.get_document(collection_name, mentee_id)
             logger.info(
@@ -182,8 +182,8 @@ class MenteeService:
                 f"Failed to retrieve mentee for profile {profile_id}"
             )
 
-    @staticmethod
-    def update_mentee(mentee_id, data, token, breadcrumb):
+    @classmethod
+    def update_mentee(cls, mentee_id, data, token, breadcrumb):
         """
         Update a Mentee notes document.
 
@@ -203,9 +203,9 @@ class MenteeService:
             HTTPNotFound: If the Mentee document does not exist
         """
         try:
-            MenteeService._check_permission(token, "update")
-            MenteeService._validate_update_data(data)
-            mentee_object_id = MenteeService._to_object_id(mentee_id, "mentee_id")
+            cls._check_permission(token, "update")
+            cls._validate_update_data(data)
+            mentee_object_id = cls._to_object_id(mentee_id, "mentee_id")
 
             # Build $set data, excluding restricted fields, and stamp 'saved'.
             set_data = {k: v for k, v in data.items() if k not in RESTRICTED_FIELDS}
@@ -213,7 +213,7 @@ class MenteeService:
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
-            collection_name = MenteeService._collection_name(config)
+            collection_name = cls._collection_name(config)
             updated = mongo.update_document(
                 collection_name,
                 match={"_id": mentee_object_id},

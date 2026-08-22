@@ -32,8 +32,8 @@ class ProfileService:
     - Mentor Dashboard aggregation (Profile + Journey progress + recent Encounter)
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """
         Authorize an operation for the Profile domain.
 
@@ -54,8 +54,8 @@ class ProfileService:
         if not allowed_roles.intersection(roles):
             raise HTTPForbidden("Mentor or admin role required to access profile data")
 
-    @staticmethod
-    def get_profile_by_token(token, breadcrumb):
+    @classmethod
+    def get_profile_by_token(cls, token, breadcrumb):
         """
         Resolve the caller's Profile from the JWT identity.
 
@@ -81,8 +81,8 @@ class ProfileService:
         )
         return profiles[0] if profiles else None
 
-    @staticmethod
-    def get_profiles(token, breadcrumb):
+    @classmethod
+    def get_profiles(cls, token, breadcrumb):
         """
         Build the Mentor Dashboard for the current user.
 
@@ -107,7 +107,7 @@ class ProfileService:
         Raises:
             HTTPForbidden: If the caller does not hold the ``mentor`` role
         """
-        ProfileService._check_permission(token, "read")
+        cls._check_permission(token, "read")
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
 
@@ -156,8 +156,8 @@ class ProfileService:
         )
         return dashboard
 
-    @staticmethod
-    def get_profile(profile_id, token, breadcrumb):
+    @classmethod
+    def get_profile(cls, profile_id, token, breadcrumb):
         """
         Build the composite Profile detail view for a single mentee.
 
@@ -180,7 +180,7 @@ class ProfileService:
             HTTPForbidden: If the caller does not hold the ``mentor`` role
             HTTPNotFound: If the Profile is not found
         """
-        ProfileService._check_permission(token, "read")
+        cls._check_permission(token, "read")
 
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
@@ -204,22 +204,22 @@ class ProfileService:
         )
         return {"profile": profile, "mentee": mentee, "encounters": encounters}
 
-    @staticmethod
-    def _resource_ref(value):
+    @classmethod
+    def _resource_ref(cls, value):
         """Normalize a journey resource reference to a string id or name."""
         if value is None:
             return None
         if isinstance(value, dict):
             if "resource_id" in value:
-                return ProfileService._resource_ref(value.get("resource_id"))
+                return cls._resource_ref(value.get("resource_id"))
             if "$oid" in value:
                 return str(value["$oid"])
             if "_id" in value:
                 return str(value["_id"])
         return str(value)
 
-    @staticmethod
-    def _load_resource(mongo, config, resource_ref, cache):
+    @classmethod
+    def _load_resource(cls, mongo, config, resource_ref, cache):
         """Load a Resource by ObjectId or name, with an in-memory cache."""
         if not resource_ref:
             return None
@@ -235,8 +235,8 @@ class ProfileService:
         cache[resource_ref] = resource
         return resource
 
-    @staticmethod
-    def _mentor_history(mongo, config, encounters):
+    @classmethod
+    def _mentor_history(cls, mongo, config, encounters):
         """Build mentor history from encounters for a mentee."""
         history = {}
         for encounter in encounters:
@@ -275,14 +275,14 @@ class ProfileService:
             reverse=True,
         )
 
-    @staticmethod
-    def get_profile_properties(profile_id, token, breadcrumb):
+    @classmethod
+    def get_profile_properties(cls, profile_id, token, breadcrumb):
         """
         Aggregate mentee activity for the Properties hub view.
 
         Joins Profile, Journey, Resource, and Encounter data for a single mentee.
         """
-        ProfileService._check_permission(token, "read")
+        cls._check_permission(token, "read")
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
 
@@ -316,9 +316,7 @@ class ProfileService:
         seen_usage = set()
 
         def add_site(scope, entry, resource):
-            resource_id = str(
-                resource.get("_id") or ProfileService._resource_ref(entry)
-            )
+            resource_id = str(resource.get("_id") or cls._resource_ref(entry))
             sites_and_links.append(
                 {
                     "resource_id": resource_id,
@@ -347,8 +345,8 @@ class ProfileService:
 
         if journey:
             for entry in journey.get("library") or []:
-                resource_ref = ProfileService._resource_ref(entry.get("resource_id"))
-                resource = ProfileService._load_resource(
+                resource_ref = cls._resource_ref(entry.get("resource_id"))
+                resource = cls._load_resource(
                     mongo, config, resource_ref, resource_cache
                 )
                 if not resource:
@@ -365,8 +363,8 @@ class ProfileService:
                     )
 
             for entry in journey.get("now") or []:
-                resource_ref = ProfileService._resource_ref(entry.get("resource_id"))
-                resource = ProfileService._load_resource(
+                resource_ref = cls._resource_ref(entry.get("resource_id"))
+                resource = cls._load_resource(
                     mongo, config, resource_ref, resource_cache
                 )
                 if not resource:
@@ -380,8 +378,8 @@ class ProfileService:
 
             for topic in journey.get("next") or []:
                 for resource_ref_raw in topic.get("resources") or []:
-                    resource_ref = ProfileService._resource_ref(resource_ref_raw)
-                    resource = ProfileService._load_resource(
+                    resource_ref = cls._resource_ref(resource_ref_raw)
+                    resource = cls._load_resource(
                         mongo, config, resource_ref, resource_cache
                     )
                     if not resource:
@@ -417,7 +415,7 @@ class ProfileService:
                 "last_activity_at": last_activity_at,
             },
             "sites_and_links": sites_and_links,
-            "mentor_history": ProfileService._mentor_history(mongo, config, encounters),
+            "mentor_history": cls._mentor_history(mongo, config, encounters),
             "journey": journey,
             "path": None,
             "resource_usage": resource_usage,

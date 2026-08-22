@@ -44,8 +44,8 @@ class PlanService:
     - Business logic for Plan domain
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """
         Check if the user has permission to perform an operation.
 
@@ -74,8 +74,8 @@ class PlanService:
         """
         pass
 
-    @staticmethod
-    def _validate_update_data(data):
+    @classmethod
+    def _validate_update_data(cls, data):
         """
         Validate update data to prevent security issues.
 
@@ -91,8 +91,8 @@ class PlanService:
             if field in data:
                 raise HTTPForbidden(f"Cannot update {field} field")
 
-    @staticmethod
-    def create_plan(data, token, breadcrumb):
+    @classmethod
+    def create_plan(cls, data, token, breadcrumb):
         """
         Create a new plan document.
 
@@ -105,7 +105,7 @@ class PlanService:
             str: The ID of the created plan document
         """
         try:
-            PlanService._check_permission(token, "create")
+            cls._check_permission(token, "create")
 
             # Remove _id if present (MongoDB will generate it)
             if "_id" in data:
@@ -129,8 +129,9 @@ class PlanService:
             logger.error(f"Error creating plan: {error_msg}")
             raise HTTPInternalServerError(f"Failed to create plan: {error_msg}")
 
-    @staticmethod
+    @classmethod
     def get_plans(
+        cls,
         token,
         breadcrumb,
         offset=DEFAULT_OFFSET,
@@ -148,7 +149,7 @@ class PlanService:
         route layer.
         """
         try:
-            PlanService._check_permission(token, "read")
+            cls._check_permission(token, "read")
             config = Config.get_instance()
 
             match = build_match_filter({}, filters or {}, PLAN_LIST_FILTERS)
@@ -173,8 +174,8 @@ class PlanService:
             logger.error(f"Error retrieving plans: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve plans")
 
-    @staticmethod
-    def get_plan(plan_id, token, breadcrumb):
+    @classmethod
+    def get_plan(cls, plan_id, token, breadcrumb):
         """
         Retrieve a specific plan document by ID.
 
@@ -190,7 +191,7 @@ class PlanService:
             HTTPNotFound: If plan is not found
         """
         try:
-            PlanService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
@@ -206,8 +207,8 @@ class PlanService:
             logger.error(f"Error retrieving plan { plan_id}: {str(e)}")
             raise HTTPInternalServerError(f"Failed to retrieve plan { plan_id}")
 
-    @staticmethod
-    def update_plan(plan_id, data, token, breadcrumb):
+    @classmethod
+    def update_plan(cls, plan_id, data, token, breadcrumb):
         """
         Update a plan document.
 
@@ -224,8 +225,8 @@ class PlanService:
             HTTPNotFound: If plan is not found
         """
         try:
-            PlanService._check_permission(token, "update")
-            PlanService._validate_update_data(data)
+            cls._check_permission(token, "update")
+            cls._validate_update_data(data)
 
             # Build update data with $set operator (excluding restricted fields)
             restricted_fields = ["_id", "created", "saved"]

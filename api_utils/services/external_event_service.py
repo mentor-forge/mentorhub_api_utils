@@ -28,13 +28,13 @@ class ExternalEventService:
     Service class for ExternalEvent domain operations (append-only).
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """Any authenticated user may create external events."""
         pass
 
-    @staticmethod
-    def create_external_event(data, token, breadcrumb):
+    @classmethod
+    def create_external_event(cls, data, token, breadcrumb):
         """
         Create a new external event document.
 
@@ -47,7 +47,7 @@ class ExternalEventService:
             dict: The created external event document including _id
         """
         try:
-            ExternalEventService._check_permission(token, "create")
+            cls._check_permission(token, "create")
 
             if "_id" in data:
                 del data["_id"]

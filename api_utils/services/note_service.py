@@ -43,13 +43,13 @@ class NoteService:
     Service class for Note domain operations.
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """Any authenticated user may create and read notes."""
         pass
 
-    @staticmethod
-    def create_note(data, token, breadcrumb):
+    @classmethod
+    def create_note(cls, data, token, breadcrumb):
         """
         Create a new note document.
 
@@ -62,7 +62,7 @@ class NoteService:
             dict: The created note document including _id
         """
         try:
-            NoteService._check_permission(token, "create")
+            cls._check_permission(token, "create")
 
             if "_id" in data:
                 del data["_id"]
@@ -86,8 +86,9 @@ class NoteService:
             logger.error(f"Error creating note: {error_msg}")
             raise HTTPInternalServerError(f"Failed to create note: {error_msg}")
 
-    @staticmethod
+    @classmethod
     def get_notes_for_resource(
+        cls,
         resource_id,
         token,
         breadcrumb,
@@ -112,7 +113,7 @@ class NoteService:
             list: Note documents for the resource
         """
         try:
-            NoteService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             from bson.errors import InvalidId
 
@@ -151,10 +152,10 @@ class NoteService:
                 f"Failed to retrieve notes for resource {resource_id}"
             )
 
-    @staticmethod
-    def list_all_notes_for_resource(resource_id, token, breadcrumb):
+    @classmethod
+    def list_all_notes_for_resource(cls, resource_id, token, breadcrumb):
         """Return all notes for a resource (composite/detail reads)."""
-        return NoteService.get_notes_for_resource(
+        return cls.get_notes_for_resource(
             resource_id,
             token,
             breadcrumb,

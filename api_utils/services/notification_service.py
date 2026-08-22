@@ -44,13 +44,13 @@ class NotificationService:
     Service class for Notification domain operations.
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """Any authenticated user may create, read, and dismiss notifications."""
         pass
 
-    @staticmethod
-    def create_notification(data, token, breadcrumb):
+    @classmethod
+    def create_notification(cls, data, token, breadcrumb):
         """
         Create a new notification document.
 
@@ -63,7 +63,7 @@ class NotificationService:
             dict: The created notification document including _id
         """
         try:
-            NotificationService._check_permission(token, "create")
+            cls._check_permission(token, "create")
 
             for field in SYSTEM_MANAGED_FIELDS:
                 data.pop(field, None)
@@ -91,8 +91,9 @@ class NotificationService:
             logger.error(f"Error creating notification: {error_msg}")
             raise HTTPInternalServerError(f"Failed to create notification: {error_msg}")
 
-    @staticmethod
+    @classmethod
     def get_notifications(
+        cls,
         token,
         breadcrumb,
         *,
@@ -114,7 +115,7 @@ class NotificationService:
             list: Notification documents newest first by created.at_time
         """
         try:
-            NotificationService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             config = Config.get_instance()
             list_match = dict(match) if match else {}
@@ -143,8 +144,8 @@ class NotificationService:
             logger.error(f"Error retrieving notifications: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve notifications")
 
-    @staticmethod
-    def dismiss_notification(notification_id, token, breadcrumb):
+    @classmethod
+    def dismiss_notification(cls, notification_id, token, breadcrumb):
         """
         Set the dismissed breadcrumb on a notification document.
 
@@ -160,7 +161,7 @@ class NotificationService:
             HTTPNotFound: If the notification is not found
         """
         try:
-            NotificationService._check_permission(token, "update")
+            cls._check_permission(token, "update")
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()

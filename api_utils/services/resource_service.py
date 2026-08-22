@@ -58,8 +58,8 @@ class ResourceService:
     - Business logic for Resource domain (read-only)
     """
 
-    @staticmethod
-    def _check_permission(token, operation):
+    @classmethod
+    def _check_permission(cls, token, operation):
         """
         Check if the user has permission to perform an operation.
 
@@ -72,13 +72,14 @@ class ResourceService:
         """
         pass
 
-    @staticmethod
-    def _is_admin(token, config):
+    @classmethod
+    def _is_admin(cls, token, config):
         admin_role = getattr(config, "ROLE_ADMIN", "admin")
         return admin_role in token.get("roles", [])
 
-    @staticmethod
+    @classmethod
     def get_resources(
+        cls,
         token,
         breadcrumb,
         offset=DEFAULT_OFFSET,
@@ -104,11 +105,11 @@ class ResourceService:
             HTTPBadRequest: If invalid parameters provided
         """
         try:
-            ResourceService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             config = Config.get_instance()
             base_match = {}
-            if not ResourceService._is_admin(token, config):
+            if not cls._is_admin(token, config):
                 base_match["status"] = {"$ne": ARCHIVED_STATUS}
 
             match = build_match_filter(base_match, filters or {}, RESOURCE_LIST_FILTERS)
@@ -137,16 +138,16 @@ class ResourceService:
             logger.error(f"Error retrieving resources: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve resources")
 
-    @staticmethod
-    def _to_resource_summary(resource):
+    @classmethod
+    def _to_resource_summary(cls, resource):
         return {
             "_id": str(resource["_id"]),
             "name": resource.get("name"),
             "description": resource.get("description"),
         }
 
-    @staticmethod
-    def get_resources_by_ids(resource_ids, token, breadcrumb):
+    @classmethod
+    def get_resources_by_ids(cls, resource_ids, token, breadcrumb):
         """
         Get minimal Resource summaries for a list of Resource IDs.
 
@@ -159,7 +160,7 @@ class ResourceService:
             list: Minimal resource dicts with _id, name, and description
         """
         try:
-            ResourceService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             unique_ids = []
             seen = set()
@@ -186,7 +187,7 @@ class ResourceService:
             config = Config.get_instance()
 
             query = {"_id": {"$in": object_ids}}
-            if not ResourceService._is_admin(token, config):
+            if not cls._is_admin(token, config):
                 query["status"] = {"$ne": ARCHIVED_STATUS}
 
             documents = mongo.get_documents(
@@ -195,9 +196,7 @@ class ResourceService:
                 project={"name": 1, "description": 1},
             )
 
-            summaries = [
-                ResourceService._to_resource_summary(resource) for resource in documents
-            ]
+            summaries = [cls._to_resource_summary(resource) for resource in documents]
 
             logger.info(
                 f"Retrieved {len(summaries)} resource summaries "
@@ -208,8 +207,8 @@ class ResourceService:
             logger.error(f"Error retrieving resources by ids: {str(e)}")
             raise HTTPInternalServerError("Failed to retrieve resources by ids")
 
-    @staticmethod
-    def get_resource(resource_id, token, breadcrumb):
+    @classmethod
+    def get_resource(cls, resource_id, token, breadcrumb):
         """
         Retrieve a resource detail composite.
 
@@ -225,7 +224,7 @@ class ResourceService:
             HTTPNotFound: If resource is not found
         """
         try:
-            ResourceService._check_permission(token, "read")
+            cls._check_permission(token, "read")
 
             mongo = MongoIO.get_instance()
             config = Config.get_instance()
