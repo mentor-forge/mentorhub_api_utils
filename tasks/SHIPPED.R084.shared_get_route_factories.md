@@ -1,6 +1,6 @@
 # R084 – Shared `create_*_get_routes` factories
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R083_flatten_get_resource_to_document`  
 **Description**: Add Flask blueprint factories for every shared consume GET. Each factory takes the **local service subclass** (`service_cls`). List GETs return a JSON array with offset/size request pagination only.
@@ -98,4 +98,8 @@ The agent must not update files outside this list. Sample server wiring is R085.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+**Approach**: Added `api_utils/routes/shared_get_routes.py` with twelve `create_*_get_routes(service_cls, *, name=...)` factories. Private helpers `_auth_context`, `_json_ok`, and `_module_attr` deduplicate token/breadcrumb/jsonify and resolve `*_LIST_*` constants from the service class MRO. List routes use `parse_list_request` (or `parse_pagination_headers` for encounter); note/encounter lists return 400 when required query params are missing. Re-exported all factories from `api_utils/routes/__init__.py` and `api_utils/__init__.py`.
+
+**Tests**: `tests/routes/test_shared_get_routes.py` — 12 tests covering list array bodies, get-by-id success/404, missing `resource_id`/`mentee_id` → 400, subclass dispatch, token failure → 401, and smoke coverage for all factory groups.
+
+**Results**: `PYTHONPATH=. pipenv run pytest tests/routes/test_shared_get_routes.py` — 12 passed; `pipenv run test` — 237 passed; R084 files black-clean; `pipenv run build` — success.
