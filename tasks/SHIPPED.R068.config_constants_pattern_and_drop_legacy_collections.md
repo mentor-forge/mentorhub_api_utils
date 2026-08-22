@@ -1,6 +1,6 @@
 # R068 – Config constants pattern and drop legacy collections
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `none`  
 **Description**: Refactor `Config` so collection names, role strings, and event-type strings are **constants** initialized at declaration (not loaded via `config_strings` / `initialize()`). Remove collection-name constants for collections that are no longer persisted Mongo dictionaries. Delete orphaned config test-data files. Prerequisite for F-UA08 / Admin and Discovery API bootstrap.
@@ -121,4 +121,34 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+### Plan
+1. Assign retained collection names, `ROLE_*`, and `EVENT_TYPE_*` inline in `Config.__init__` immediately after `config_items` / `versions` / `enumerators` setup (not via `initialize()`).
+2. Remove those keys from `config_strings` so they are not env/file overridable.
+3. Drop `IDENTITY_COLLECTION_NAME`, `LOGIN_COLLECTION_NAME`, `CARD_COLLECTION_NAME`, `DASHBOARD_COLLECTION_NAME`, and `SUBSCRIPTION_COLLECTION_NAME`.
+4. Delete matching orphaned files under `tests/test_data/config/`.
+5. Add `tests/config/test_config_constants.py` asserting retained values directly.
+6. Leave existing config tests unchanged — they iterate remaining configurable keys only.
+
+### Commands run
+- `PYTHONPATH=. pipenv run pytest tests/config/ -v -m "not e2e and not integration"` — 36 passed
+- `pipenv run test tests/config/` — Pipfile `test` script ignores extra path args; same as full unit suite
+- `pipenv run test` — 269 passed, 24 deselected (e2e/integration)
+- `pipenv run black api_utils/config/config.py tests/config/test_config_constants.py` — formatted R068 files only
+- `pipenv run black --check api_utils/config/config.py tests/config/test_config_constants.py` — unchanged
+- `pipenv run lint` — fails on 25 **pre-existing** files outside this task's Outputs (R068 files are clean)
+- `pipenv run build` — `api_utils-0.6.0.tar.gz` and `api_utils-0.6.0-py3-none-any.whl`
+
+### Test results
+- Config suite: 36 passed (7 new constant tests + existing defaults/env/file/jwt)
+- Full unit suite: 269 passed
+- Build: success
+- No service behavior changes; services still read `Config.get_instance().<NAME>`
+- Existing config tests needed no edits
+- Did not add Setting/Payment/ExternalEvent/Notification (R069)
+- Did not bump version
+- Did not commit or push
+- Status left Pending by execution agent; orchestrator confirmation: `pipenv run test` 269 passed, `pipenv run build` success. Status set to Shipped.
+
+### Follow-ups
+- Repo-wide `pipenv run lint` already fails on 25 files not in this task's Outputs (black `--target-version` / py3.14 safety check). Not fixed here.
+- R069 adds ingress collection constants.
