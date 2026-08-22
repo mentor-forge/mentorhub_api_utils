@@ -1,6 +1,6 @@
 # R086 – E2E tests for demo-server consume GETs
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R085_register_get_routes_on_sample_server`  
 **Description**: Black-box tests against `pipenv run dev` for every shared GET mounted on the demo server: auth, JSON array lists with offset/size, get-by-id 404.
@@ -74,4 +74,13 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+**Approach**: Added `tests/test_get_routes_e2e.py` with parametrized `@pytest.mark.e2e` tests mirroring `tests/test_server.py` (lazy `requests`, `BASE_URL`, `get_auth_token`). Covers all six list prefixes (401, 200 array, size header), four get-by-id 404 prefixes, note/encounter query validation, and item-only auth/not-found paths.
+
+**Aggregation deviation**: `GET /api/aggregation/<resource_id>` for an unknown resource returns `200` + `null` per R082 outbound visibility (not HTTP 404). Dedicated test `test_aggregation_unknown_resource_id_returns_null` documents that contract; journey/mentee/external-event still assert 404.
+
+**Test results** (demo server on 8385, Mongo on 8383):
+
+- `pipenv run test`: 237 passed, 57 deselected
+- `pipenv run e2e`: 40 passed, 254 deselected
+- `black --check tests/test_get_routes_e2e.py`: clean
+- `pipenv run build`: success
