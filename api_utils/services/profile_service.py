@@ -1,10 +1,10 @@
 """
 Profile service for business logic and RBAC.
 
-Handles RBAC checks and MongoDB operations for the Profile domain. The Profile
-list endpoint powers the Mentor Dashboard: it returns the mentees assigned to
-the current user along with each mentee's learning-journey progress and most
-recent encounter summary.
+Customer **controls** Profile and Admin **creates** Profile; every other domain
+**consumes** it. This shared class therefore exposes only the consume surface
+(get-by-token, get-by-id, paginated list) plus the global ``create_profile``
+POST. Mentor Dashboard enrich lives on the Mentor API subclass, not here.
 
 Per the API standards (separation of concerns), this service contains business
 logic only. It raises the appropriate domain exceptions (e.g. HTTPForbidden,
@@ -13,13 +13,50 @@ responsible for translating those, and any unexpected error, into HTTP
 responses.
 """
 
+from bson import ObjectId
+
 from api_utils import MongoIO, Config
 from api_utils.mongo_utils import encode_document
-from api_utils.flask_utils.exceptions import HTTPForbidden, HTTPNotFound
-from pymongo import ASCENDING
+from api_utils.mongo_utils.list_query import (
+    DEFAULT_OFFSET,
+    DEFAULT_SIZE,
+    build_match_filter,
+    build_sort_by,
+    execute_list_query,
+)
+from api_utils.flask_utils.exceptions import HTTPNotFound
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Live BSON schema (Profile 0.1.0.0): `_id`, `customer_id`, and `mentor_id` are
+# objectId; the nested `experience[].roles[]` `start` / `end` fields are dates.
+# Breadcrumb `at_time` values already arrive as datetime.
+ID_PROPERTIES = ["_id", "customer_id", "mentor_id"]
+DATE_PROPERTIES = ["start", "end"]
+
+SYSTEM_MANAGED_FIELDS = ("_id", "created", "saved")
+
+PROFILE_LIST_FILTERS = {
+    "name": {"type": "contains", "field": "name"},
+    "full_name": {"type": "contains", "field": "full_name"},
+    "email": {"type": "contains", "field": "email"},
+    "description": {"type": "contains", "field": "description"},
+    "status": {"type": "in_list", "field": "status"},
+    "roles": {"type": "in_list", "field": "roles"},
+}
+
+PROFILE_LIST_ORDER = {
+    "default": {"field": "name", "order": "asc"},
+    "allowed": {
+        "name": ("asc", "desc"),
+        "full_name": ("asc", "desc"),
+        "email": ("asc", "desc"),
+        "status": ("asc", "desc"),
+        "created.at_time": ("asc", "desc"),
+        "saved.at_time": ("asc", "desc"),
+    },
+}
 
 
 class ProfileService:
@@ -27,32 +64,28 @@ class ProfileService:
     Service class for Profile domain operations.
 
     Handles:
-    - RBAC authorization checks (requires the ``mentor`` or ``admin`` role)
+    - RBAC authorization checks
     - MongoDB operations via MongoIO singleton
-    - Mentor Dashboard aggregation (Profile + Journey progress + recent Encounter)
+    - Consume (GET / list) and global create for the Profile domain
     """
 
     @classmethod
     def _check_permission(cls, token, operation):
         """
-        Authorize an operation for the Profile domain.
-
-        Users granted either the ``mentor`` or ``admin`` role (per the shared
-        ``Config`` role constants) may access profile data through this service.
+        Check if the user has permission to perform an operation.
 
         Args:
             token: Token dictionary with user_id and roles
-            operation: The operation being performed (e.g., 'read')
+            operation: The operation being performed (e.g., 'read', 'create')
 
         Raises:
-            HTTPForbidden: If the caller holds neither the ``mentor`` nor the
-                ``admin`` role
+            HTTPForbidden: If user doesn't have required permission
+
+        Reads and creates on the shared class require a valid token only.
+        Admin and Customer subclasses add the inbound write check for
+        ``create_profile``; outbound read filtering arrives in R082.
         """
-        config = Config.get_instance()
-        allowed_roles = {config.ROLE_MENTOR, config.ROLE_ADMIN}
-        roles = token.get("roles", []) or []
-        if not allowed_roles.intersection(roles):
-            raise HTTPForbidden("Mentor or admin role required to access profile data")
+        pass
 
     @classmethod
     def get_profile_by_token(cls, token, breadcrumb):
@@ -82,102 +115,70 @@ class ProfileService:
         return profiles[0] if profiles else None
 
     @classmethod
-    def get_profiles(cls, token, breadcrumb):
+    def get_profiles(
+        cls,
+        token,
+        breadcrumb,
+        offset=DEFAULT_OFFSET,
+        size=DEFAULT_SIZE,
+        filters=None,
+        sort_by=None,
+    ):
         """
-        Build the Mentor Dashboard for the current user.
-
-        The caller's Profile is resolved from the JWT identity (the token's
-        ``user_id`` matches ``Profile.name``). One dashboard card is returned per
-        mentee assigned to that mentor (Profiles whose ``mentor_id`` matches the
-        caller's Profile ``_id``), in a pre-determined order (by name). This
-        endpoint is read-only and non-paginated, so it takes no parameters.
-
-        Each card contains:
-        - basic Profile information (``_id``, ``name``, ``description``)
-        - ``progress``: resource counts for the active Journey (library/now/next)
-        - ``last_encounter``: summary of the most recent Encounter, or ``None``
+        Get a paginated array of profile documents.
 
         Args:
-            token: Authentication token (``user_id`` identifies the mentor)
+            token: Authentication token
             breadcrumb: Audit breadcrumb
+            offset: Zero-based start index
+            size: Number of documents to return
+            filters: Parsed filter dict from parse_filter_params
+            sort_by: PyMongo sort list from build_sort_by; default name asc
 
         Returns:
-            list[dict]: Mentor Dashboard cards, one per mentee.
-
-        Raises:
-            HTTPForbidden: If the caller does not hold the ``mentor`` role
+            list: Profile documents
         """
         cls._check_permission(token, "read")
-        mongo = MongoIO.get_instance()
+
         config = Config.get_instance()
-
-        # Imported lazily so the Journey/Encounter services (which do not import
-        # ProfileService) never create an import cycle.
-        from api_utils.services.journey_service import JourneyService
-        from api_utils.services.encounter_service import EncounterService
-
-        mentor_name = token.get("user_id")
-        mentors = mongo.get_documents(
-            config.PROFILE_COLLECTION_NAME,
-            match={"name": mentor_name},
-        )
-        if not mentors:
-            logger.info(
-                f"No profile found for mentor '{mentor_name}'; "
-                "returning empty dashboard"
+        # Outbound RBAC scoping (archived rows, customer/mentor/own-profile
+        # visibility) lands in R082; until then the list is unscoped.
+        base_match = {}
+        match = build_match_filter(base_match, filters or {}, PROFILE_LIST_FILTERS)
+        if sort_by is None:
+            default = PROFILE_LIST_ORDER["default"]
+            sort_by = build_sort_by(
+                default["field"], default["order"], PROFILE_LIST_ORDER
             )
-            return []
-        mentor_id = mentors[0]["_id"]
 
-        mentees = mongo.get_documents(
+        profiles = execute_list_query(
             config.PROFILE_COLLECTION_NAME,
-            match={"mentor_id": mentor_id},
-            sort_by=[("name", ASCENDING)],
+            match=match,
+            sort_by=sort_by,
+            offset=offset,
+            size=size,
         )
-
-        dashboard = [
-            {
-                "_id": mentee["_id"],
-                "name": mentee.get("name"),
-                "description": mentee.get("description"),
-                "progress": JourneyService.get_journey_progress(
-                    mentee["_id"], token, breadcrumb
-                ),
-                "last_encounter": EncounterService.get_recent_encounter(
-                    mentee["_id"], token, breadcrumb
-                ),
-            }
-            for mentee in mentees
-        ]
 
         logger.info(
-            f"Built mentor dashboard with {len(dashboard)} mentees "
-            f"for user {mentor_name}"
+            f"Retrieved {len(profiles)} profiles (offset={offset}, size={size}) "
+            f"for user {token.get('user_id')}"
         )
-        return dashboard
+        return profiles
 
     @classmethod
     def get_profile(cls, profile_id, token, breadcrumb):
         """
-        Build the composite Profile detail view for a single mentee.
-
-        Returns the ``ProfileDetail`` document defined by the OpenAPI contract:
-        the mentee's ``Profile`` plus the related mentee-notes document and the
-        full list of the mentee's ``Encounter`` documents. The related domains
-        are assembled with **service-to-service** calls (``MenteeService`` and
-        ``EncounterService``); this service never reads the Mentee/Encounter
-        collections directly for the composite.
+        Retrieve a single profile document by ID.
 
         Args:
-            profile_id: The mentee Profile ID to retrieve
+            profile_id: The Profile ID to retrieve
             token: Token dictionary with user_id and roles
             breadcrumb: Breadcrumb dictionary for logging
 
         Returns:
-            dict: ``{"profile": ..., "mentee": ..., "encounters": [...]}``
+            dict: The Profile document
 
         Raises:
-            HTTPForbidden: If the caller does not hold the ``mentor`` role
             HTTPNotFound: If the Profile is not found
         """
         cls._check_permission(token, "read")
@@ -188,242 +189,37 @@ class ProfileService:
         if profile is None:
             raise HTTPNotFound(f"Profile {profile_id} not found")
 
-        # Imported lazily so the Mentee/Encounter services (which do not import
-        # ProfileService) never create an import cycle.
-        from api_utils.services.mentee_service import MenteeService
-        from api_utils.services.encounter_service import EncounterService
-
-        mentee = MenteeService.get_mentee(profile_id, token, breadcrumb)
-        encounters = EncounterService.get_encounters_for_mentee(
-            profile_id, token, breadcrumb
-        )
-
-        logger.info(
-            f"Built profile detail for {profile_id} with {len(encounters)} "
-            f"encounters for user {token.get('user_id')}"
-        )
-        return {"profile": profile, "mentee": mentee, "encounters": encounters}
+        logger.info(f"Retrieved profile {profile_id} for user {token.get('user_id')}")
+        return profile
 
     @classmethod
-    def _resource_ref(cls, value):
-        """Normalize a journey resource reference to a string id or name."""
-        if value is None:
-            return None
-        if isinstance(value, dict):
-            if "resource_id" in value:
-                return cls._resource_ref(value.get("resource_id"))
-            if "$oid" in value:
-                return str(value["$oid"])
-            if "_id" in value:
-                return str(value["_id"])
-        return str(value)
-
-    @classmethod
-    def _load_resource(cls, mongo, config, resource_ref, cache):
-        """Load a Resource by ObjectId or name, with an in-memory cache."""
-        if not resource_ref:
-            return None
-        if resource_ref in cache:
-            return cache[resource_ref]
-        resource = mongo.get_document(config.RESOURCE_COLLECTION_NAME, resource_ref)
-        if resource is None:
-            resources = mongo.get_documents(
-                config.RESOURCE_COLLECTION_NAME,
-                match={"name": resource_ref},
-            )
-            resource = resources[0] if resources else None
-        cache[resource_ref] = resource
-        return resource
-
-    @classmethod
-    def _mentor_history(cls, mongo, config, encounters):
-        """Build mentor history from encounters for a mentee."""
-        history = {}
-        for encounter in encounters:
-            mentor_id = encounter.get("mentor_id")
-            if not mentor_id:
-                continue
-            mentor_key = str(mentor_id)
-            entry = history.setdefault(
-                mentor_key,
-                {
-                    "mentor_id": mentor_key,
-                    "mentor_name": None,
-                    "encounter_count": 0,
-                    "first_date": encounter.get("date"),
-                    "last_date": encounter.get("date"),
-                },
-            )
-            entry["encounter_count"] += 1
-            encounter_date = encounter.get("date")
-            if encounter_date:
-                if not entry["first_date"] or encounter_date < entry["first_date"]:
-                    entry["first_date"] = encounter_date
-                if not entry["last_date"] or encounter_date > entry["last_date"]:
-                    entry["last_date"] = encounter_date
-
-        for entry in history.values():
-            mentor = mongo.get_document(
-                config.PROFILE_COLLECTION_NAME, entry["mentor_id"]
-            )
-            if mentor:
-                entry["mentor_name"] = mentor.get("name")
-
-        return sorted(
-            history.values(),
-            key=lambda item: item.get("last_date") or "",
-            reverse=True,
-        )
-
-    @classmethod
-    def get_profile_properties(cls, profile_id, token, breadcrumb):
+    def create_profile(cls, data, token, breadcrumb):
         """
-        Aggregate mentee activity for the Properties hub view.
+        Create a new profile document.
 
-        Joins Profile, Journey, Resource, and Encounter data for a single mentee.
+        Args:
+            data: Dictionary containing profile data
+            token: Token dictionary with user_id and roles
+            breadcrumb: Breadcrumb dictionary for logging
+
+        Returns:
+            dict: The created profile document including _id
         """
-        cls._check_permission(token, "read")
+        cls._check_permission(token, "create")
+
+        for field in SYSTEM_MANAGED_FIELDS:
+            data.pop(field, None)
+
+        encode_document(data, ID_PROPERTIES, DATE_PROPERTIES)
+
+        data["created"] = breadcrumb
+        data["saved"] = breadcrumb
+
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
+        profile_id = mongo.create_document(config.PROFILE_COLLECTION_NAME, data)
+        if "_id" not in data:
+            data["_id"] = ObjectId(profile_id)
 
-        profile = mongo.get_document(config.PROFILE_COLLECTION_NAME, profile_id)
-        if profile is None:
-            raise HTTPNotFound(f"Profile {profile_id} not found")
-
-        from api_utils.services.journey_service import JourneyService
-        from api_utils.services.encounter_service import EncounterService
-
-        # Journey.profile_id is stored as a BSON ObjectId; encode the match id so
-        # a string profile_id (route path param) matches the stored ObjectId.
-        # MongoIO.get_documents does not coerce match values, so an unencoded
-        # string would silently return no journey here.
-        journey_match = {"profile_id": profile_id, "status": "active"}
-        encode_document(journey_match, ["profile_id"], [])
-        journeys = mongo.get_documents(
-            config.JOURNEY_COLLECTION_NAME,
-            match=journey_match,
-        )
-        journey = journeys[0] if journeys else None
-        progress = JourneyService.get_journey_progress(profile_id, token, breadcrumb)
-        encounters = EncounterService.get_encounters_for_mentee(
-            profile_id, token, breadcrumb
-        )
-
-        resource_cache = {}
-        sites_and_links = []
-        resource_usage = []
-        celebrations = []
-        seen_usage = set()
-
-        def add_site(scope, entry, resource):
-            resource_id = str(resource.get("_id") or cls._resource_ref(entry))
-            sites_and_links.append(
-                {
-                    "resource_id": resource_id,
-                    "name": resource.get("name") or resource_id,
-                    "url": resource.get("url"),
-                    "scope": scope,
-                    "used": entry.get("used"),
-                    "started": entry.get("started"),
-                    "completed": entry.get("completed"),
-                }
-            )
-
-        def add_usage(resource, times_used, status):
-            resource_id = str(resource.get("_id"))
-            if resource_id in seen_usage:
-                return
-            seen_usage.add(resource_id)
-            resource_usage.append(
-                {
-                    "resource_id": resource_id,
-                    "name": resource.get("name") or resource_id,
-                    "times_used": times_used,
-                    "status": status,
-                }
-            )
-
-        if journey:
-            for entry in journey.get("library") or []:
-                resource_ref = cls._resource_ref(entry.get("resource_id"))
-                resource = cls._load_resource(
-                    mongo, config, resource_ref, resource_cache
-                )
-                if not resource:
-                    continue
-                add_site("library", entry, resource)
-                add_usage(resource, 1, "completed")
-                if entry.get("completed"):
-                    celebrations.append(
-                        {
-                            "resource_id": str(resource.get("_id")),
-                            "name": resource.get("name") or resource_ref,
-                            "completed_at": entry.get("completed"),
-                        }
-                    )
-
-            for entry in journey.get("now") or []:
-                resource_ref = cls._resource_ref(entry.get("resource_id"))
-                resource = cls._load_resource(
-                    mongo, config, resource_ref, resource_cache
-                )
-                if not resource:
-                    continue
-                add_site("now", entry, resource)
-                add_usage(
-                    resource,
-                    int(entry.get("used") or 0) or 1,
-                    "in_progress",
-                )
-
-            for topic in journey.get("next") or []:
-                for resource_ref_raw in topic.get("resources") or []:
-                    resource_ref = cls._resource_ref(resource_ref_raw)
-                    resource = cls._load_resource(
-                        mongo, config, resource_ref, resource_cache
-                    )
-                    if not resource:
-                        continue
-                    add_site("next", {}, resource)
-                    add_usage(resource, 0, "queued")
-
-        celebrations.sort(
-            key=lambda item: item.get("completed_at") or "",
-            reverse=True,
-        )
-
-        last_activity_at = None
-        if encounters:
-            last_activity_at = encounters[0].get("date")
-        for celebration in celebrations:
-            completed_at = celebration.get("completed_at")
-            if completed_at and (
-                not last_activity_at or completed_at > last_activity_at
-            ):
-                last_activity_at = completed_at
-
-        result = {
-            "profile": profile,
-            "status_summary": {
-                "profile_status": profile.get("status"),
-                "journey_status": journey.get("status") if journey else None,
-                "library_count": progress["library"],
-                "now_count": progress["now"],
-                "next_count": progress["next"],
-                "encounters_count": len(encounters),
-                "resources_engaged": len(seen_usage),
-                "last_activity_at": last_activity_at,
-            },
-            "sites_and_links": sites_and_links,
-            "mentor_history": cls._mentor_history(mongo, config, encounters),
-            "journey": journey,
-            "path": None,
-            "resource_usage": resource_usage,
-            "celebrations": celebrations,
-        }
-
-        logger.info(
-            f"Built profile properties for {profile_id} "
-            f"for user {token.get('user_id')}"
-        )
-        return result
+        logger.info(f"Created profile {profile_id} for user {token.get('user_id')}")
+        return data
