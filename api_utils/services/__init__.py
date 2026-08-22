@@ -5,6 +5,7 @@ Shared domain service implementations for Mentor Hub APIs.
 from api_utils.services.aggregation_service import AggregationService
 from api_utils.services.encounter_service import EncounterService
 from api_utils.services.event_service import EventService
+from api_utils.services.external_event_service import ExternalEventService
 from api_utils.services.journey_service import JourneyService, TEMPLATE_JOURNEY_ID
 from api_utils.services.mentee_service import MenteeService
 from api_utils.services.note_service import NoteService
@@ -17,6 +18,7 @@ __all__ = [
     "AggregationService",
     "EncounterService",
     "EventService",
+    "ExternalEventService",
     "JourneyService",
     "MenteeService",
     "NoteService",
