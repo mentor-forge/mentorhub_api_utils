@@ -1,6 +1,6 @@
 # R085 – Register shared GET routes on the demo server
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R084_shared_get_route_factories`  
 **Description**: Mount every `create_*_get_routes` factory on the api_utils demo server using the **shared** service classes (this process has no domain subclass). Update demo OpenAPI paths.
@@ -70,4 +70,10 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+**Approach**: Registered all twelve `create_*_get_routes` blueprints in `api_utils/server.py`, passing shared `api_utils.services` classes (no domain subclass). Added startup log lines for each new prefix alongside existing `/docs`, `/api/config`, `/metrics` entries. Extended `docs/openapi.yaml` with GET operations for every mounted path using reusable `offset`/`size` header parameters, generic `DocumentObject` / `DocumentArray` schemas, Bearer auth, and shared `401` / `404` responses.
+
+**Test results**:
+- `pipenv run test`: 237 passed, 23 deselected (e2e)
+- `PYTHONPATH=. pipenv run pytest tests/test_server.py --collect-only`: 6 e2e tests collected
+- `pipenv run black --check api_utils/server.py`: clean
+- `pipenv run build`: success (api_utils-1.0.0 wheel/sdist)
