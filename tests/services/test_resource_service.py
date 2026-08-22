@@ -249,20 +249,10 @@ class TestResourceService(unittest.TestCase):
             },
         )
 
-    @patch("api_utils.services.note_service.NoteService.list_all_notes_for_resource")
-    @patch(
-        "api_utils.services.aggregation_service.AggregationService.get_aggregation_for_resource"
-    )
     @patch("api_utils.services.resource_service.Config.get_instance")
     @patch("api_utils.services.resource_service.MongoIO.get_instance")
-    def test_get_resource_returns_composite(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_aggregation,
-        mock_get_notes,
-    ):
-        """Test get_resource returns resource detail composite via services."""
+    def test_get_resource_returns_document(self, mock_get_mongo, mock_get_config):
+        """Test get_resource returns the raw resource document."""
         mock_get_config.return_value = self._mock_config()
 
         mock_mongo = MagicMock()
@@ -271,25 +261,14 @@ class TestResourceService(unittest.TestCase):
             "name": "resource1",
         }
         mock_get_mongo.return_value = mock_mongo
-        mock_get_aggregation.return_value = {
-            "resource_id": "123",
-            "note_count": 2,
-        }
-        mock_get_notes.return_value = [{"_id": "note1", "resource_id": "123"}]
 
         result = ResourceService.get_resource(
             "123", self.mock_token, self.mock_breadcrumb
         )
 
-        self.assertEqual(result["resource"]["_id"], "123")
-        self.assertEqual(result["aggregation"]["note_count"], 2)
-        self.assertEqual(len(result["notes"]), 1)
-        mock_get_aggregation.assert_called_once_with(
-            "123", self.mock_token, self.mock_breadcrumb
-        )
-        mock_get_notes.assert_called_once_with(
-            "123", self.mock_token, self.mock_breadcrumb
-        )
+        self.assertEqual(result["_id"], "123")
+        self.assertEqual(result["name"], "resource1")
+        mock_mongo.get_document.assert_called_once_with("Resource", "123")
 
     @patch("api_utils.services.resource_service.Config.get_instance")
     @patch("api_utils.services.resource_service.MongoIO.get_instance")
@@ -308,19 +287,9 @@ class TestResourceService(unittest.TestCase):
         with self.assertRaises(HTTPNotFound):
             ResourceService.get_resource("123", self.mock_token, self.mock_breadcrumb)
 
-    @patch("api_utils.services.note_service.NoteService.list_all_notes_for_resource")
-    @patch(
-        "api_utils.services.aggregation_service.AggregationService.get_aggregation_for_resource"
-    )
     @patch("api_utils.services.resource_service.Config.get_instance")
     @patch("api_utils.services.resource_service.MongoIO.get_instance")
-    def test_get_resource_admin_sees_archived(
-        self,
-        mock_get_mongo,
-        mock_get_config,
-        mock_get_aggregation,
-        mock_get_notes,
-    ):
+    def test_get_resource_admin_sees_archived(self, mock_get_mongo, mock_get_config):
         """Admin callers may fetch archived resources by id."""
         mock_get_config.return_value = self._mock_config()
 
@@ -331,14 +300,12 @@ class TestResourceService(unittest.TestCase):
             "status": "archived",
         }
         mock_get_mongo.return_value = mock_mongo
-        mock_get_aggregation.return_value = None
-        mock_get_notes.return_value = []
 
         result = ResourceService.get_resource(
             "123", self.mock_admin_token, self.mock_breadcrumb
         )
 
-        self.assertEqual(result["resource"]["status"], "archived")
+        self.assertEqual(result["status"], "archived")
 
     @patch("api_utils.services.resource_service.Config.get_instance")
     @patch("api_utils.services.resource_service.MongoIO.get_instance")

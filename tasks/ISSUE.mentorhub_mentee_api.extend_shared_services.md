@@ -106,6 +106,31 @@ present; otherwise copy them too.
 `add_completion` currently does `from api_utils.services.note_service import NoteService` —
 change to `from src.services.note_service import NoteService`.
 
+## Harvest-back: Resource GET composite
+
+Shared `get_resource` returns the raw document. Move the BFF composite onto the
+Mentee `ResourceService` subclass and wrap `get_resource`:
+
+```python
+@classmethod
+def get_resource(cls, resource_id, token, breadcrumb):
+    resource = super().get_resource(resource_id, token, breadcrumb)
+    aggregation = AggregationService.get_aggregation_for_resource(
+        resource_id, token, breadcrumb
+    )
+    notes = NoteService.list_all_notes_for_resource(
+        resource_id, token, breadcrumb
+    )
+    return {
+        "resource": resource,
+        "aggregation": aggregation,
+        "notes": notes,
+    }
+```
+
+Use **local** `AggregationService` and `NoteService` subclasses for the enrich
+calls.
+
 ## Event
 
 `EventService.create_event` remains on shared (global POST). Provide a local

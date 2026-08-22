@@ -201,7 +201,7 @@ class ResourceService:
     @classmethod
     def get_resource(cls, resource_id, token, breadcrumb):
         """
-        Retrieve a resource detail composite.
+        Retrieve a specific resource document by ID.
 
         Args:
             resource_id: The resource ID to retrieve
@@ -209,7 +209,7 @@ class ResourceService:
             breadcrumb: Breadcrumb dictionary for logging
 
         Returns:
-            dict: {resource, aggregation, notes}
+            dict: The resource document
 
         Raises:
             HTTPNotFound: If resource is not found or not visible
@@ -226,24 +226,10 @@ class ResourceService:
                 not_found_message=f"Resource {resource_id} not found",
             )
 
-            from api_utils.services.aggregation_service import AggregationService
-            from api_utils.services.note_service import NoteService
-
-            aggregation = AggregationService.get_aggregation_for_resource(
-                resource_id, token, breadcrumb
-            )
-            notes = NoteService.list_all_notes_for_resource(
-                resource_id, token, breadcrumb
-            )
-
             logger.info(
-                f"Retrieved resource detail { resource_id} for user {token.get('user_id')}"
+                f"Retrieved resource { resource_id} for user {token.get('user_id')}"
             )
-            return {
-                "resource": resource,
-                "aggregation": aggregation,
-                "notes": notes,
-            }
+            return resource
         except HTTPNotFound:
             raise
         except Exception as e:

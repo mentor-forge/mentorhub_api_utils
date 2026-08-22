@@ -1,6 +1,6 @@
 # R083 – Flatten shared Resource GET-by-id to a plain document
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R082_apply_outbound_rbac_to_shared_gets`  
 **Description**: Shared consume GETs return a JSON **array** (lists) or a **plain document** (get-by-id). Strip the leftover Resource BFF composite so `get_resource` matches Path/Plan. Confirm api_utils has no cursor or extra pagination-header contract.
@@ -60,4 +60,10 @@ The agent must not update files outside this list.
 
 ## Execution Notes
 
-_Reserved for the task execution agent._
+**Approach**: Flattened `ResourceService.get_resource` to mirror `PathService.get_path` — fetch document, `require_outbound`, return raw dict. Removed AggregationService/NoteService imports and composite envelope.
+
+**Harvest-back**: Appended **Harvest-back: Resource GET composite** to `ISSUE.mentorhub_mentee_api.extend_shared_services.md` with classmethod/`cls` wrapper calling `super().get_resource` then attaching aggregation/notes.
+
+**Audit**: Grep of `api_utils/` and `tests/` — zero matches for `after_id`, `has_more`, `next_cursor`, `X-Pagination-`.
+
+**Tests**: Updated `test_get_resource_returns_document`, `test_get_resource_admin_sees_archived`; removed aggregation/notes mocks from get_resource tests.
