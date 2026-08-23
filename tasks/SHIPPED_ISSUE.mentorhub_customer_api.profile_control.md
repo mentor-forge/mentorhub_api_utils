@@ -1,8 +1,11 @@
-# Customer API: Profile control subclass (create + PATCH)
+Please create @_PLANNING.MD tasks to implement this issue. Only create tasks, do not edit any files outside of the @tasks folder.
 
-> **Cross-repo issue artifact.** Paste-ready description for
-> **`mentorhub_customer_api`**. Not orchestrated from `mentorhub_api_utils`.
-> **Blocked on**: `api-utils>=1.0.0` (R076 shared `create_profile` + R082 outbound GETs).
+**GitHub**: https://github.com/mentor-forge/mentorhub_customer_api/issues/17
+
+# F-CA15: Customer API Profile control subclass (create + PATCH)
+
+Follows **F-CA14** (pin `api-utils==1.0.0` and list migration). Do not re-bump
+the pin.
 
 ## Summary
 
@@ -11,13 +14,15 @@ Customer **controls** Customer, Payment, and Profile; **creates** Event
 and **global** `create_profile`. This API's subclass adds Profile PATCH / mutate
 (and any Customer-domain enrich). Routes import the local subclass.
 
+F-CA14 should already have a thin `ProfileService(SharedProfileService)` and
+`create_profile_get_routes`. This issue adds inbound write checks and PATCH.
+
 ## Pin
 
-- `api-utils==1.0.0` via `pipenv run install`.
+- Already `api-utils==1.0.0` from F-CA14. `pipenv run install` if the lockfile
+  needs a refresh.
 
 ## `src/services/profile_service.py`
-
-Replace the local infinite-scroll Profile service with:
 
 ```python
 from api_utils.services import ProfileService as SharedProfileService
@@ -30,12 +35,13 @@ class ProfileService(SharedProfileService):
 ```
 
 - Inherit `get_profile`, `get_profiles`, `get_profile_by_token`, `create_profile`.
-- Drop `execute_infinite_scroll_query` / `after_id` (api_utils removed that module in R074).
-- Use shared list filters/order if R076 exported `PROFILE_LIST_FILTERS` / `PROFILE_LIST_ORDER`.
+- Shared list filters/order: `PROFILE_LIST_FILTERS` / `PROFILE_LIST_ORDER` on
+  `api_utils.services.profile_service`.
+- No `execute_infinite_scroll_query` / `after_id` (removed from api_utils in R074).
 
 ## Routes
 
-- Profile GET/list → local subclass (inherited shared GETs).
+- Profile GET/list → `create_profile_get_routes(ProfileService)` (from F-CA14).
 - Profile POST → `ProfileService.create_profile` (shared implementation via inherit).
 - Profile PATCH → local `update_profile`.
 - Event POST → inherit `EventService.create_event` (global POST).
@@ -53,11 +59,10 @@ admin root, hide archived). This subclass adds **inbound** writes:
 
 ## Shared GET routes
 
-Replace Profile GET/list handlers with
-`create_profile_get_routes(ProfileService)` from `api_utils` (see
-`tasks/SHIPPED.R084.shared_get_route_factories.md`). Add Profile POST/PATCH on
-the returned blueprint. List GET body is a JSON array; pagination is
-`offset`/`size` request headers only (no cursor, no `X-Pagination-*`).
+Keep `create_profile_get_routes(ProfileService)` from
+`api_utils.routes.shared_get_routes`. Add Profile POST/PATCH on the returned
+blueprint. List GET body is a JSON array; pagination is `offset`/`size`
+request headers only (no cursor, no `X-Pagination-*`).
 
 ## Acceptance
 

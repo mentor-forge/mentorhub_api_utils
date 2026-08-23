@@ -121,24 +121,19 @@ Implementation tasks: `PENDING.R048` → `PENDING.R049` → (`PENDING.R050`–`P
 
 ## Downstream follow-on issues
 
-Paste ISSUE artifacts from `tasks/ISSUE.*.md` into the target repo's planning session (or promote to `PENDING.*` task files there).
+Paste shipped ISSUE artifacts from `tasks/SHIPPED_ISSUE.*.md` into the target repo's planning session (or promote to `PENDING.*` task files there). GitHub issues are already filed on the target repos (MentorHub project, On Deck). Each repo's **first** issue pins `api-utils==1.0.0`.
+
+| Repo | First issue (owns 1.0.0 pin) | Follow-on |
+|------|------------------------------|-----------|
+| `mentorhub_mentee_api` | `SHIPPED_ISSUE.journey_api.md` | `SHIPPED_ISSUE.mentorhub_mentee_api.extend_shared_services.md` (same PR) |
+| `mentorhub_mentor_api` | `SHIPPED_ISSUE.mentorhub_mentor_api.extend_shared_services.md` | — |
+| `mentorhub_customer_api` | `SHIPPED_ISSUE.mentorhub_customer_api.migrate_off_infinite_scroll.md` | `SHIPPED_ISSUE.mentorhub_customer_api.profile_control.md` |
+| `mentorhub_discovery_api` | `SHIPPED_ISSUE.mentorhub_discovery_api.migrate_off_infinite_scroll.md` | `SHIPPED_ISSUE.mentorhub_discovery_api.notification_control.md` |
+| `mentorhub_admin_api` | `SHIPPED_ISSUE.mentorhub_admin_api.profile_create.md` | — |
 
 ### Journey promote + GET detail harvest (R059–R061, `api-utils==0.5.2`)
 
-Harvested from **`mentorhub_mentee_api`** only. Mutation methods return plain Journey; `get_my_journey_detail` embeds read-time `profile`.
-
-| Task | Source | Upstream outcome |
-|------|--------|------------------|
-| SHIPPED.R059 | `journey_promote_service.py` | `promote_path_to_next`, `promote_module_to_next` |
-| SHIPPED.R060 | `journey_detail_service.py` | `get_my_journey_detail`; `"profile"` in `RESTRICTED_UPDATE_FIELDS` |
-| SHIPPED.R061 | — | Patch `0.5.2` |
-
-**Not in R059–R061:** `get_journey_progress` (mentor dashboard aggregation) — still local in `mentorhub_mentor_api`; planned in `ISSUE.mentorhub_api_utils.harvest_mentor_services.md`.
-
-**Downstream:**
-
-- **`mentorhub_mentee_api`** — `ISSUE.mentorhub_mentee_api.adopt_journey_harvest_from_api_utils.md`: bump pin, routes → `JourneyService`, **delete entire `src/services/`**.
-- **`mentorhub_mentor_api`** — `ISSUE.mentorhub_mentor_api.bump_api_utils_journey_harvest.md`: **interim bump only**; local `journey_service.py` (progress) stays until `harvest_mentor_services` + `adopt_harvested_services`.
+Harvested from **`mentorhub_mentee_api`** only. Mutation methods return plain Journey; `get_my_journey_detail` embeds read-time `profile`. `get_journey_progress` is now on shared `JourneyService` (1.0.0). Downstream 1.0.0 adoption is the SHIPPED_ISSUE table above — do **not** delete `src/services/` in Mentor API.
 
 ## MongoDB dictionary schemas
 
