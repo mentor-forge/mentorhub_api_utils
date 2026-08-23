@@ -1,28 +1,40 @@
-# Restore Journey control POST/PATCH/mutate on the Mentee API subclass
+Please create @_PLANNING.MD tasks to implement this issue. Only create tasks, do not edit any files outside of the @tasks folder.
 
-> **Cross-repo issue artifact.** Paste-ready description for follow-on planning
-> in **`mentorhub_mentee_api`** (the service domain that **controls** Journey).
-> Not part of the `PENDING.*` orchestration chain in `mentorhub_api_utils`
-> and must not be executed from that folder.
-> **Blocked on**: `mentorhub_api_utils` R075–R082 shipped and published
-> (`api-utils>=1.0.0`).
->
-> `architecture.yaml`: Mentee **controls** Journey; Customer and Discovery
-> **consume** it. Shared `api_utils.services.JourneyService` keeps GET-by-id
-> and `get_journey_progress` only. This file holds the post / patch / mutate
-> (and get-or-create / enrich) code removed from the shared class.
+**GitHub**: https://github.com/mentor-forge/mentorhub_mentee_api/issues/26
+
+# F-EA12: Pin api-utils 1.0.0 and restore Journey control on a Mentee subclass
+
+This is the **first** `mentorhub_mentee_api` issue for the 1.0.0 wave. It owns
+the `api-utils==1.0.0` pin bump. Ship in the **same PR** as
+`SHIPPED_ISSUE.mentorhub_mentee_api.extend_shared_services.md` — 1.0.0 strips Journey
+mutations **and** Note/Aggregation/Path enrich that those routes still call.
+
+`architecture.yaml`: Mentee **controls** Journey; Customer and Discovery
+**consume** it. Shared `api_utils.services.JourneyService` keeps GET-by-id
+(`get_journey`, outbound 404 when hidden) and `get_journey_progress` only.
+This file holds the post / patch / mutate (and get-or-create / enrich) code
+removed from the shared class in R078.
 
 ## Summary
 
-Pin `api-utils>=1.0.0`. Recreate `src/services/journey_service.py` as a
+Today this repo pins `api-utils==0.5.2` and has **no** `src/services/` —
+routes import `api_utils.services.JourneyService` directly and still call
+`get_my_journey_detail`, promote, advance, complete, and `update_journey`.
+Those methods are gone in **1.0.0**.
+
+Pin `api-utils==1.0.0`. Recreate `src/services/journey_service.py` as a
 **subclass** of `api_utils.services.JourneyService`. Put clone-on-GET, profile
 enrich, create, PATCH, promote, advance, and complete on the subclass.
 Point `src/routes/journey_routes.py` at the **local** class.
 
-Ship in the same planning wave as
-`ISSUE.mentorhub_mentee_api.extend_shared_services.md` —
-`complete_resource` calls `AggregationService.add_completion`, which also
-leaves api_utils in R079.
+`complete_resource` calls local `AggregationService.add_completion` from the
+paired extend-shared-services issue.
+
+## Pin (this issue owns the bump)
+
+- Set `api-utils==1.0.0` in `Pipfile` / `Pipfile.lock`.
+- Install with `pipenv run install` (CodeArtifact auth; run `mh` first if
+  needed). Do **not** use bare `pipenv install`.
 
 ## Pattern
 
@@ -53,8 +65,7 @@ Outbound visibility is already applied in shared GETs (`api-utils>=1.0.0`). This
 By-id consume GET may come from
 `create_journey_get_routes(JourneyService)` (returns `/<journey_id>` only; no
 list). **`GET /api/journey` (`""`) stays Mentee-local** for get-or-create /
-`get_my_journey_detail`. Add control PATCH routes on the same blueprint. See
-`tasks/SHIPPED.R084.shared_get_route_factories.md`.
+`get_my_journey_detail`. Add control PATCH routes on the same blueprint. See `api_utils.routes.shared_get_routes.create_journey_get_routes`.
 
 ## Route mapping (unchanged HTTP contract)
 
@@ -82,18 +93,21 @@ the parent — it is get-or-create and lives here.
 
 ## Tests to port from api_utils
 
-When R078 deletes these, copy behavior from git history of:
+Copy behavior from git history of `mentorhub_api_utils` at **`9af2886`**
+(classmethod form, before R078 strip):
 
-- `../mentorhub_api_utils/tests/services/test_journey_service.py` — get_my_journey clone, update RBAC, advance, complete, promote, get_my_journey_detail
-- `../mentorhub_api_utils/tests/services/test_journey_service_integration.py` — clone validity, advance/complete round trip, promote
+- `tests/services/test_journey_service.py` — get_my_journey clone, update RBAC, advance, complete, promote, get_my_journey_detail
+- `tests/services/test_journey_service_integration.py` — clone validity, advance/complete round trip, promote
 
 Keep route tests; patch `src.routes.journey_routes.JourneyService.*`.
 
 ## Acceptance
 
+- `Pipfile` pins `api-utils==1.0.0`.
 - `src/services/journey_service.py` exists and subclasses the shared class.
 - Routes import `from src.services.journey_service import JourneyService`.
 - GET still returns Journey + embedded `profile`; PATCH mutations return plain Journey.
+- Lands in the same PR as the extend-shared-services issue.
 - `pipenv run test`, `pipenv run lint`, `pipenv run build`, `pipenv run e2e` pass.
 
 ---
@@ -101,8 +115,9 @@ Keep route tests; patch `src.routes.journey_routes.JourneyService.*`.
 ## Harvest-back source (classmethod form)
 
 Paste into `src/services/journey_service.py`. Converted from
-`api_utils/services/journey_service.py` (pre-R078). Parent `get_journey`
-raises `HTTPNotFound` when missing — `get_my_journey` clones in that case.
+`api_utils/services/journey_service.py` before R078 (classmethod form). Parent
+`get_journey` raises `HTTPNotFound` when missing or hidden by outbound RBAC —
+`get_my_journey` clones in that case.
 MongoDB I/O stays on **MongoIO**. `complete_resource` uses local
 `AggregationService.add_completion` (Mentee subclass) and shared
 `EventService.create_event`.

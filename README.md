@@ -173,13 +173,15 @@ by outbound RBAC).
 Domain API repos should pin **`api-utils==1.0.0`** and follow the issue
 artifacts in this repo's `tasks/` folder (not orchestrated from here):
 
-- [`tasks/ISSUE.journey_api.md`](tasks/ISSUE.journey_api.md) — Journey
+- [`tasks/SHIPPED_ISSUE.journey_api.md`](tasks/SHIPPED_ISSUE.journey_api.md) — Journey
   control POST/PATCH/mutate on the Mentee API subclass
-- [`tasks/ISSUE.mentorhub_admin_api.profile_create.md`](tasks/ISSUE.mentorhub_admin_api.profile_create.md)
-- [`tasks/ISSUE.mentorhub_customer_api.profile_control.md`](tasks/ISSUE.mentorhub_customer_api.profile_control.md)
-- [`tasks/ISSUE.mentorhub_discovery_api.notification_control.md`](tasks/ISSUE.mentorhub_discovery_api.notification_control.md)
-- [`tasks/ISSUE.mentorhub_mentor_api.extend_shared_services.md`](tasks/ISSUE.mentorhub_mentor_api.extend_shared_services.md)
-- [`tasks/ISSUE.mentorhub_mentee_api.extend_shared_services.md`](tasks/ISSUE.mentorhub_mentee_api.extend_shared_services.md)
+- [`tasks/SHIPPED_ISSUE.mentorhub_admin_api.profile_create.md`](tasks/SHIPPED_ISSUE.mentorhub_admin_api.profile_create.md)
+- [`tasks/SHIPPED_ISSUE.mentorhub_customer_api.migrate_off_infinite_scroll.md`](tasks/SHIPPED_ISSUE.mentorhub_customer_api.migrate_off_infinite_scroll.md)
+- [`tasks/SHIPPED_ISSUE.mentorhub_customer_api.profile_control.md`](tasks/SHIPPED_ISSUE.mentorhub_customer_api.profile_control.md)
+- [`tasks/SHIPPED_ISSUE.mentorhub_discovery_api.migrate_off_infinite_scroll.md`](tasks/SHIPPED_ISSUE.mentorhub_discovery_api.migrate_off_infinite_scroll.md)
+- [`tasks/SHIPPED_ISSUE.mentorhub_discovery_api.notification_control.md`](tasks/SHIPPED_ISSUE.mentorhub_discovery_api.notification_control.md)
+- [`tasks/SHIPPED_ISSUE.mentorhub_mentor_api.extend_shared_services.md`](tasks/SHIPPED_ISSUE.mentorhub_mentor_api.extend_shared_services.md)
+- [`tasks/SHIPPED_ISSUE.mentorhub_mentee_api.extend_shared_services.md`](tasks/SHIPPED_ISSUE.mentorhub_mentee_api.extend_shared_services.md)
 
 Collection names, roles, and event types are inline `Config` constants
 (`PROFILE_COLLECTION_NAME`, `ROLE_ADMIN`, `EVENT_TYPE_LOGIN`, …) assigned at

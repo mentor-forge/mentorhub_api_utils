@@ -1,25 +1,41 @@
-# Extend shared services in Mentor API (inherit GETs; keep control mutations)
+Please create @_PLANNING.MD tasks to implement this issue. Only create tasks, do not edit any files outside of the @tasks folder.
 
-> **Cross-repo issue artifact.** Paste-ready description for
-> **`mentorhub_mentor_api`**. Not orchestrated from `mentorhub_api_utils`.
-> **Blocked on**: `api-utils>=1.0.0` (R075–R082).
+**GitHub**: https://github.com/mentor-forge/mentorhub_mentor_api/issues/26
+
+# F-RA13: Pin api-utils 1.0.0 and extend shared services in Mentor API
+
+This is the **first** (and only) `mentorhub_mentor_api` issue for the 1.0.0
+wave. It owns the `api-utils==1.0.0` pin bump.
+
+Supersedes the old "delete `src/services/`" adoption plan. Mentor **keeps**
+local subclasses for control mutations and dashboard enrich.
 
 ## Summary
 
 Mentor **controls** Resource, Path, Plan, Encounter; **creates** Event;
-**consumes** Profile (`architecture.yaml`). Today several local services
-*compose* shared GETs (`SharedResourceService.get_resources`). After 1.0.0 they
-must **extend** the shared class. Routes already import `src.services` — keep
-that; do not switch routes to `api_utils.services`.
+**consumes** Profile (`architecture.yaml`). Today this repo pins
+`api-utils==0.5.1`. Several local services *compose* shared GETs
+(`SharedResourceService.get_resources`) instead of extending them.
+`ProfileService` and `JourneyService` are still standalone local classes
+(`@staticmethod`) with dashboard enrich / progress aggregation.
+
+After 1.0.0 they must **extend** the shared class. Routes already import
+`src.services` — keep that; do not switch routes to `api_utils.services`.
 
 Shared Profile no longer includes Mentor Dashboard enrich (`get_profiles`
 cards, composite `get_profile`, `get_profile_properties`). Those stay local
 on the Mentor `ProfileService` subclass (they already exist in
-`src/services/profile_service.py`).
+`src/services/profile_service.py`). Shared `JourneyService.get_journey_progress`
+is now upstream — delete the local duplicate.
 
-## Pin
+1.0.0 also strips Plan/Encounter/Mentee **writes** from the shared class
+(R079). Keep those on the Mentor subclasses (harvest-back below).
 
-- `api-utils==1.0.0` via `pipenv run install`.
+## Pin (this issue owns the bump)
+
+- Set `api-utils==1.0.0` in `Pipfile` / `Pipfile.lock` (currently `==0.5.1`).
+- Install via `pipenv run install` (CodeArtifact auth; run `mh` first if
+  needed). Do **not** use bare `pipenv install`.
 
 ## Convert composition → inheritance
 
@@ -304,10 +320,10 @@ def update_mentee(cls, mentee_id, data, token, breadcrumb):
 ## Shared GET routes
 
 Replace duplicated GET handlers with `create_*_get_routes(LocalService)` from
-`api_utils` (see `tasks/SHIPPED.R084.shared_get_route_factories.md`). Add
-control POST/PATCH on the returned blueprint. List GET body is a JSON array;
-pagination is `offset`/`size` request headers only (no cursor, no
-`X-Pagination-*`).
+`api_utils.routes.shared_get_routes`. Add control POST/PATCH on the returned
+blueprint. List GET body is a JSON array; pagination is `offset`/`size`
+request headers only. **Drop** the current `X-Pagination-*` response headers
+on Resource/Path/Plan/Event lists — they are not part of the 1.0.0 contract.
 
 | Route module | Factory |
 |--------------|---------|
@@ -326,10 +342,8 @@ that assumed shared `ProfileService.get_profiles` returned dashboard cards.
 
 ## Acceptance
 
+- `Pipfile` pins `api-utils==1.0.0`.
 - Every domain service class subclasses the matching `api_utils.services` class.
 - Control POST/PATCH remain in this repo; no route imports shared service classes.
-- Dashboard enrich still works.
+- Dashboard enrich still works; list GETs have no `X-Pagination-*` headers.
 - `pipenv run test`, `pipenv run lint`, `pipenv run build`, `pipenv run e2e`.
-
-Supersedes `ISSUE.mentorhub_mentor_api.adopt_harvested_services.md` (that issue
-deleted `src/services/` — the opposite of this split).

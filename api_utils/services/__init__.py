@@ -24,7 +24,7 @@ these classes (``class JourneyService(api_utils.services.JourneyService)``)
 so overrides dispatch through ``cls``. Routes import the local API
 subclass, not ``api_utils.services`` directly.
 
-See ``README.md`` and ``tasks/ISSUE.journey_api.md`` for extend patterns.
+See ``README.md`` and ``tasks/SHIPPED_ISSUE.journey_api.md`` for extend patterns.
 """
 
 from api_utils.services.aggregation_service import AggregationService
