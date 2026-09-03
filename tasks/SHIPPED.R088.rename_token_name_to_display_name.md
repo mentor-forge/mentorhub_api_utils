@@ -1,6 +1,6 @@
 # R088 – Rename token dict `name` to `display_name`
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `none`  
 **Description**: Expose the human-readable token label as `display_name` instead of `name` on the dict returned by `create_flask_token()` / `Token.to_dict()`, so domain APIs (starting with F-AA04) can stop using `token.name`. JWT wire claim stays OIDC `name`.
@@ -76,3 +76,18 @@ Run all commands from the **api_utils repository root**.
 The agent must not update files outside this list.
 
 ## Execution Notes
+
+**Plan**
+- Map `Token.to_dict()` / `create_flask_token()` to `display_name` from JWT `name`, then JWT `display_name`, then `""`; omit `name` from the application dict (no dual-write).
+- Leave JWT wire claim `name` in `Token.claims`, `_create_test_jwt`, and `tests/e2e_auth.py`.
+- Update token tests for `display_name`, `"name" not in token_dict`, missing-claim empty string, and JWT `display_name` without `name`.
+- Swap mock flask-token `"name"` → `"display_name"` in the three listed service test files only; leave document-field `"name"` fixtures unchanged.
+- Run `pipenv run test`, `pipenv run lint` on changed files, `pipenv run build`; try `pipenv run e2e` if a demo server is up. Do not bump version (R089).
+
+**Completion**
+- `Token.to_dict()` / `create_flask_token()` now emit `display_name` from JWT `name`, then JWT `display_name`, then `""`; application dict omits `name`. JWT wire claim `name` remains on `Token.claims`. Version left at `1.0.0`.
+- `pipenv run test`: **239 passed**, 57 deselected (e2e/integration), 9 subtests passed.
+- `pipenv run e2e`: **skipped** — no demo server on localhost:9092. E2E JWTs still mint claim `name`.
+- Changed files are `black`-clean. `pipenv run lint` fails on 21 pre-existing files (not reformatted).
+- `pipenv run build`: **ok** (`api_utils-1.0.0`).
+- Follow-on R089: bump `pyproject.toml` to `1.0.1`, update README pin examples + brief `display_name` note; do not change token behavior. Downstream F-AA04 (`ISSUE.mentorhub_admin_api.pin_1_0_1_display_name.md`) after merge/`tag-release`.
