@@ -1,6 +1,6 @@
 # R089 – Bump api-utils patch to 1.0.1
 
-**Status**: Pending  
+**Status**: Shipped  
 **Type**: Feature  
 **Depends On**: `R088_rename_token_name_to_display_name`  
 **Description**: Publish F-AA04’s token `display_name` change as patch **`1.0.1`** so `mentorhub_admin_api` can pin and install it from CodeArtifact after merge and `tag-release`.
@@ -61,3 +61,9 @@ Run all commands from the **api_utils repository root**.
 The agent must not update files outside this list.
 
 ## Execution Notes
+
+- Plan: `pyproject.toml` is still `1.0.0` → bump to `1.0.1`. Update README pin examples (`Release and publish`, `Downstream planning artifacts`) from `api-utils==1.0.0` to `api-utils==1.0.1`. Add one sentence that `create_flask_token()` returns `display_name` (not `name`). No token/service behavior changes.
+- Complete: version is `1.0.1`. README pins updated; one-sentence `display_name` note added. Token behavior unchanged.
+- `pipenv run test`: 239 passed, 57 deselected.
+- `pipenv run lint`: fails repo-wide (21 unrelated files would be reformatted; pre-existing Black/Python target mismatch). R089 files are not Python.
+- `pipenv run build`: `api_utils-1.0.1.tar.gz` and `api_utils-1.0.1-py3-none-any.whl`.
