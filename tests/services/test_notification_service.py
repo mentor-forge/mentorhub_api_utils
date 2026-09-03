@@ -21,7 +21,7 @@ class TestNotificationService(unittest.TestCase):
     def setUp(self):
         self.mock_token = {
             "user_id": "test_user",
-            "name": "Test User",
+            "display_name": "Test User",
             "roles": ["admin"],
             "profile_id": PROFILE_ID,
             "customer_id": CUSTOMER_ID,

@@ -17,7 +17,7 @@ class TestEventService(unittest.TestCase):
     def setUp(self):
         self.mock_token = {
             "user_id": "test_user",
-            "name": "Test User",
+            "display_name": "Test User",
             "roles": ["admin"],
             "profile_id": "507f1f77bcf86cd799439011",
             "customer_id": "507f1f77bcf86cd799439012",

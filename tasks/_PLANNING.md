@@ -121,7 +121,7 @@ Implementation tasks: `PENDING.R048` → `PENDING.R049` → (`PENDING.R050`–`P
 
 ## Downstream follow-on issues
 
-Paste shipped ISSUE artifacts from `tasks/SHIPPED_ISSUE.*.md` into the target repo's planning session (or promote to `PENDING.*` task files there). GitHub issues are already filed on the target repos (MentorHub project, On Deck). Each repo's **first** issue pins `api-utils==1.0.0`.
+Paste shipped ISSUE artifacts from `tasks/SHIPPED_ISSUE.*.md` into the target repo's planning session (or promote to `PENDING.*` task files there). GitHub issues are already filed on the target repos (MentorHub project, On Deck). Each repo's **first** issue pins `api-utils==1.0.0`. F-AA04 (`ISSUE.mentorhub_admin_api.pin_1_0_1_display_name.md`) pins **`api-utils==1.0.1`** after the token dict key rename (`name` → `display_name`).
 
 | Repo | First issue (owns 1.0.0 pin) | Follow-on |
 |------|------------------------------|-----------|
@@ -129,7 +129,7 @@ Paste shipped ISSUE artifacts from `tasks/SHIPPED_ISSUE.*.md` into the target re
 | `mentorhub_mentor_api` | `SHIPPED_ISSUE.mentorhub_mentor_api.extend_shared_services.md` | — |
 | `mentorhub_customer_api` | `SHIPPED_ISSUE.mentorhub_customer_api.migrate_off_infinite_scroll.md` | `SHIPPED_ISSUE.mentorhub_customer_api.profile_control.md` |
 | `mentorhub_discovery_api` | `SHIPPED_ISSUE.mentorhub_discovery_api.migrate_off_infinite_scroll.md` | `SHIPPED_ISSUE.mentorhub_discovery_api.notification_control.md` |
-| `mentorhub_admin_api` | `SHIPPED_ISSUE.mentorhub_admin_api.profile_create.md` | — |
+| `mentorhub_admin_api` | `SHIPPED_ISSUE.mentorhub_admin_api.profile_create.md` | `ISSUE.mentorhub_admin_api.pin_1_0_1_display_name.md` (F-AA04, `api-utils==1.0.1`) |
 
 ### Journey promote + GET detail harvest (R059–R061, `api-utils==0.5.2`)
 
