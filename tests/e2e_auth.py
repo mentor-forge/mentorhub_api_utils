@@ -38,7 +38,7 @@ def get_auth_token() -> str:
         "iss": issuer,
         "aud": audience,
         "sub": _E2E_SUBJECT,
-        "name": _E2E_NAME,
+        "display_name": _E2E_NAME,
         "iat": now,
         "exp": now + 10 * 365 * 24 * 60 * 60,
         "roles": list(_E2E_ROLES),

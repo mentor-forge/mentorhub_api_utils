@@ -21,7 +21,7 @@ class Token:
 
     The Token is constructed from the Authorization header and provides:
     - Token claims (user_id, roles, profile_id, customer_id, mentor_id, etc.)
-    - Application dict via ``to_dict()`` (display_name from JWT ``name``)
+    - Application dict via ``to_dict()`` (``display_name`` from the JWT claim, else ``unknown``)
     - Request metadata (remote IP)
 
     Raises HTTPUnauthorized exception if:
@@ -99,9 +99,9 @@ class Token:
         """
         Map JWT claims to expected internal format.
 
-        Maps standard JWT claims (sub, name, roles, etc.) and custom persona
-        claims (profile_id, customer_id, mentor_id) to the format expected by
-        the rest of the application.
+        Maps standard JWT claims (sub, display_name, roles, etc.) and custom
+        persona claims (profile_id, customer_id, mentor_id) to the format
+        expected by the rest of the application.
         """
         # Expose ``sub`` as ``user_id`` for application code
         if "sub" in self.claims:
@@ -135,11 +135,15 @@ class Token:
         Returns:
             dict: Token information including claims and metadata (minimal set)
         """
+        display_name = self.claims.get("display_name")
+        if not isinstance(display_name, str) or not display_name.strip():
+            display_name = "unknown"
+        else:
+            display_name = display_name.strip()
+
         return {
             "user_id": self.claims.get("user_id", self.claims.get("sub", "")),
-            "display_name": self.claims.get("name")
-            or self.claims.get("display_name")
-            or "",
+            "display_name": display_name,
             "roles": self.claims.get("roles", []),
             "profile_id": self.claims.get("profile_id", ""),
             "customer_id": self.claims.get("customer_id", ""),
