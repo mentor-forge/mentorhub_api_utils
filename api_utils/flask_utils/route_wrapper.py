@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 def handle_route_exceptions(f):
     """
     Decorator to handle custom HTTP exceptions in Flask routes.
-    
+
     This wrapper automatically converts custom exceptions to appropriate
     JSON responses with the correct HTTP status codes:
     - HTTPBadRequest -> 400
@@ -31,13 +31,13 @@ def handle_route_exceptions(f):
     - HTTPNotFound -> 404
     - HTTPInternalServerError -> 500
     - Other exceptions -> 500 (with generic error message)
-    
+
     Args:
         f: The Flask route function to wrap
-        
+
     Returns:
         The wrapped function with exception handling
-        
+
     Example:
         @app.route('/api/example')
         @handle_route_exceptions
@@ -47,6 +47,7 @@ def handle_route_exceptions(f):
                 raise HTTPUnauthorized("Invalid token")
             return jsonify({"data": "success"})
     """
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         try:
@@ -67,7 +68,9 @@ def handle_route_exceptions(f):
             logger.error(f"HTTPInternalServerError: {e.message}")
             return jsonify({"error": e.message}), e.status_code
         except Exception as e:
-            logger.error(f"Unexpected error in route {f.__name__}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Unexpected error in route {f.__name__}: {str(e)}", exc_info=True
+            )
             return jsonify({"error": "A processing error occurred"}), 500
-    return decorated_function
 
+    return decorated_function

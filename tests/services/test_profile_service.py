@@ -77,12 +77,12 @@ class TestProfileService(unittest.TestCase):
     def test_get_profile_by_token_returns_caller_profile(
         self, mock_get_mongo, mock_get_config
     ):
-        """The caller's Profile is the one whose name matches token user_id."""
+        """The caller's Profile is selected by token profile_id."""
         mock_get_config.return_value = _make_config()
 
-        profile_doc = {"_id": MENTOR_ID, "name": "mike"}
+        profile_doc = {"_id": MENTOR_ID, "display_name": "Mike Storey"}
         mock_mongo = MagicMock()
-        mock_mongo.get_documents.return_value = [profile_doc]
+        mock_mongo.get_document.return_value = profile_doc
         mock_get_mongo.return_value = mock_mongo
 
         result = ProfileService.get_profile_by_token(
@@ -90,9 +90,7 @@ class TestProfileService(unittest.TestCase):
         )
 
         self.assertEqual(result, profile_doc)
-        mock_mongo.get_documents.assert_called_once_with(
-            "Profile", match={"name": "mike"}
-        )
+        mock_mongo.get_document.assert_called_once_with("Profile", str(MENTOR_ID))
 
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
@@ -103,7 +101,6 @@ class TestProfileService(unittest.TestCase):
         mock_get_config.return_value = _make_config()
 
         mock_mongo = MagicMock()
-        mock_mongo.get_documents.return_value = []
         mock_get_mongo.return_value = mock_mongo
 
         result = ProfileService.get_profile_by_token(
@@ -111,6 +108,7 @@ class TestProfileService(unittest.TestCase):
         )
 
         self.assertIsNone(result)
+        mock_mongo.get_document.assert_not_called()
 
     @patch("api_utils.services.profile_service.execute_list_query")
     @patch("api_utils.services.profile_service.Config.get_instance")
@@ -118,13 +116,13 @@ class TestProfileService(unittest.TestCase):
     def test_get_profiles_returns_paginated_documents(
         self, mock_get_mongo, mock_get_config, mock_execute_list_query
     ):
-        """The list is a plain page of documents sorted by name ascending."""
+        """The list is a plain page of documents sorted by display name."""
         mock_get_config.return_value = _make_config()
         mock_get_mongo.return_value = MagicMock()
 
         documents = [
-            {"_id": MENTEE_1_ID, "name": "daniel"},
-            {"_id": MENTEE_2_ID, "name": "lucky"},
+            {"_id": MENTEE_1_ID, "display_name": "Daniel Dissler"},
+            {"_id": MENTEE_2_ID, "display_name": "Lucky Minyard"},
         ]
         mock_execute_list_query.return_value = documents
 
@@ -155,7 +153,7 @@ class TestProfileService(unittest.TestCase):
         ProfileService.get_profiles(
             self.mock_token,
             self.mock_breadcrumb,
-            filters={"name": "dan", "status": ["active", "provisioned"]},
+            filters={"display_name": "Dan", "status": ["active", "provisioned"]},
         )
 
         match = mock_execute_list_query.call_args.kwargs["match"]
@@ -163,8 +161,8 @@ class TestProfileService(unittest.TestCase):
         status_clauses = [c["status"] for c in and_clauses if "status" in c]
         self.assertEqual(status_clauses[0], {"$ne": "archived"})
         self.assertEqual(status_clauses[1], {"$in": ["active", "provisioned"]})
-        name_clause = next(c for c in and_clauses if "name" in c)
-        self.assertEqual(name_clause["name"]["$regex"], "dan")
+        name_clause = next(c for c in and_clauses if "display_name" in c)
+        self.assertEqual(name_clause["display_name"]["$regex"], "Dan")
 
     @patch("api_utils.services.profile_service.execute_list_query")
     @patch("api_utils.services.profile_service.Config.get_instance")
@@ -191,7 +189,7 @@ class TestProfileService(unittest.TestCase):
 
         profile_doc = {
             "_id": MENTEE_1_ID,
-            "name": "daniel",
+            "display_name": "Daniel Dissler",
             "mentor_id": MENTOR_ID,
             "status": "active",
         }
@@ -215,7 +213,7 @@ class TestProfileService(unittest.TestCase):
 
         profile_doc = {
             "_id": OTHER_PROFILE_ID,
-            "name": "stranger",
+            "display_name": "Stranger",
             "status": "active",
         }
         mock_mongo = MagicMock()
@@ -235,7 +233,7 @@ class TestProfileService(unittest.TestCase):
 
         profile_doc = {
             "_id": OTHER_PROFILE_ID,
-            "name": "stranger",
+            "display_name": "Stranger",
             "status": "archived",
         }
         mock_mongo = MagicMock()
@@ -311,8 +309,7 @@ class TestProfileService(unittest.TestCase):
         mock_get_mongo.return_value = mock_mongo
 
         data = {
-            "name": "daniel",
-            "full_name": "Daniel Mentee",
+            "display_name": "Daniel Mentee",
             "customer_id": str(CUSTOMER_ID),
             "mentor_id": str(MENTOR_ID),
             "status": "active",
@@ -331,7 +328,7 @@ class TestProfileService(unittest.TestCase):
         self.assertEqual(stored["saved"], self.mock_breadcrumb)
 
         self.assertEqual(result["_id"], NEW_PROFILE_ID)
-        self.assertEqual(result["name"], "daniel")
+        self.assertEqual(result["display_name"], "Daniel Mentee")
 
     @patch("api_utils.services.profile_service.Config.get_instance")
     @patch("api_utils.services.profile_service.MongoIO.get_instance")
@@ -347,7 +344,7 @@ class TestProfileService(unittest.TestCase):
 
         data = {
             "_id": str(MENTEE_1_ID),
-            "name": "daniel",
+            "display_name": "Daniel Mentee",
             "created": {"by_user": "spoofed"},
             "saved": {"by_user": "spoofed"},
         }
