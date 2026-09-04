@@ -4,6 +4,7 @@ from datetime import datetime
 
 from api_utils import encode_document
 
+
 class TestEncodeProperties(unittest.TestCase):
 
     def setUp(self):
@@ -64,7 +65,9 @@ class TestEncodeProperties(unittest.TestCase):
         date_property = "prop_name"
         document = {"object": {date_property: date_string}}
         encode_document(document, [], [date_property])
-        self.assertEqual(document["object"][date_property], datetime.fromisoformat(date_string))
+        self.assertEqual(
+            document["object"][date_property], datetime.fromisoformat(date_string)
+        )
 
     def test_multiple_date_encode(self):
         date_string1 = "2000-01-23T12:34:56.000Z"
@@ -90,8 +93,12 @@ class TestEncodeProperties(unittest.TestCase):
         date_prop = "date_property"
         document = {list_prop: [{date_prop: date_string1}, {date_prop: date_string2}]}
         encode_document(document, [], [date_prop])
-        self.assertEqual(document[list_prop][0][date_prop], datetime.fromisoformat(date_string1))
-        self.assertEqual(document[list_prop][1][date_prop], datetime.fromisoformat(date_string2))
+        self.assertEqual(
+            document[list_prop][0][date_prop], datetime.fromisoformat(date_string1)
+        )
+        self.assertEqual(
+            document[list_prop][1][date_prop], datetime.fromisoformat(date_string2)
+        )
 
     def test_complexity(self):
         document = {
@@ -101,20 +108,29 @@ class TestEncodeProperties(unittest.TestCase):
             "list_of_id": [
                 "000000000000000000000001",
                 "000000000000000000000002",
-                "000000000000000000000003"
+                "000000000000000000000003",
             ],
             "date_property": "2000-01-23T01:23:45.000Z",
             "list_of_dates": [
                 "2009-10-11T12:34:56.000Z",
                 "2009-11-11T11:11:11.000Z",
                 "2009-12-12T12:12:12.000Z",
-                "2010-01-01T01:01:01.000Z",                
+                "2010-01-01T01:01:01.000Z",
             ],
             "list_of_objects": [
-                {"id_property": "000000000000000000000004", "date_property": "2002-02-02T02:02:02.000Z" },
-                {"id_property": "000000000000000000000005", "date_property": "2003-03-03T03:03:03.000Z" },
-                {"id_property": "000000000000000000000006", "date_property": "2004-04-04T04:04:04.000Z" },
-            ]
+                {
+                    "id_property": "000000000000000000000004",
+                    "date_property": "2002-02-02T02:02:02.000Z",
+                },
+                {
+                    "id_property": "000000000000000000000005",
+                    "date_property": "2003-03-03T03:03:03.000Z",
+                },
+                {
+                    "id_property": "000000000000000000000006",
+                    "date_property": "2004-04-04T04:04:04.000Z",
+                },
+            ],
         }
 
         expected = {
@@ -124,7 +140,7 @@ class TestEncodeProperties(unittest.TestCase):
             "list_of_id": [
                 ObjectId("000000000000000000000001"),
                 ObjectId("000000000000000000000002"),
-                ObjectId("000000000000000000000003")
+                ObjectId("000000000000000000000003"),
             ],
             "date_property": datetime.fromisoformat("2000-01-23T01:23:45.000Z"),
             "list_of_dates": [
@@ -134,39 +150,52 @@ class TestEncodeProperties(unittest.TestCase):
                 datetime.fromisoformat("2010-01-01T01:01:01.000Z"),
             ],
             "list_of_objects": [
-                {"id_property": ObjectId("000000000000000000000004"), "date_property": datetime.fromisoformat("2002-02-02T02:02:02.000Z") },
-                {"id_property": ObjectId("000000000000000000000005"), "date_property": datetime.fromisoformat("2003-03-03T03:03:03.000Z") },
-                {"id_property": ObjectId("000000000000000000000006"), "date_property": datetime.fromisoformat("2004-04-04T04:04:04.000Z") },
-            ]
+                {
+                    "id_property": ObjectId("000000000000000000000004"),
+                    "date_property": datetime.fromisoformat("2002-02-02T02:02:02.000Z"),
+                },
+                {
+                    "id_property": ObjectId("000000000000000000000005"),
+                    "date_property": datetime.fromisoformat("2003-03-03T03:03:03.000Z"),
+                },
+                {
+                    "id_property": ObjectId("000000000000000000000006"),
+                    "date_property": datetime.fromisoformat("2004-04-04T04:04:04.000Z"),
+                },
+            ],
         }
 
-        encode_document(document, ["base_id_property", "id_property", "list_of_id"], ["date_property", "list_of_dates"])
+        encode_document(
+            document,
+            ["base_id_property", "id_property", "list_of_id"],
+            ["date_property", "list_of_dates"],
+        )
         self.assertEqual(document, expected)
 
     def test_polymorphic(self):
         document = {
-            "name": "Test polymorphic list",   
+            "name": "Test polymorphic list",
             "polymorphic_list": [
                 {
-                    "id_property": "999999999999999999999999", 
-                    "date_property": "2009-10-11T12:34:56.000Z"
+                    "id_property": "999999999999999999999999",
+                    "date_property": "2009-10-11T12:34:56.000Z",
                 },
                 "123456789012345678901234",
                 [
                     "123456789012345678900000",
                     "123456789012345678900001",
                     "123456789012345678900002",
-                    "123456789012345678900003"
-                ]
-            ]
+                    "123456789012345678900003",
+                ],
+            ],
         }
 
         expected = {
-            "name": "Test polymorphic list",   
+            "name": "Test polymorphic list",
             "polymorphic_list": [
                 {
-                    "id_property": "999999999999999999999999", 
-                    "date_property": "2009-10-11T12:34:56.000Z"
+                    "id_property": "999999999999999999999999",
+                    "date_property": "2009-10-11T12:34:56.000Z",
                     # Note that these will not encode - known limitation
                 },
                 ObjectId("123456789012345678901234"),
@@ -174,14 +203,16 @@ class TestEncodeProperties(unittest.TestCase):
                     ObjectId("123456789012345678900000"),
                     ObjectId("123456789012345678900001"),
                     ObjectId("123456789012345678900002"),
-                    ObjectId("123456789012345678900003")
-                ]
-            ]
+                    ObjectId("123456789012345678900003"),
+                ],
+            ],
         }
 
-        encode_document(document, ["polymorphic_list", "id_property"], ["date_property"])
+        encode_document(
+            document, ["polymorphic_list", "id_property"], ["date_property"]
+        )
         self.assertEqual(document, expected)
-        
-if __name__ == '__main__':
-    unittest.main()
 
+
+if __name__ == "__main__":
+    unittest.main()
