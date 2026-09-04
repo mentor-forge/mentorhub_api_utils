@@ -61,11 +61,11 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==1.0.1`). Releasing is two steps:
+Libraries use **pinned SemVer** in CodeArtifact (`api-utils==1.0.2`). Releasing is two steps:
 - Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
 - After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
 
-`create_flask_token()` returns `display_name` (not `name`); the JWT wire claim remains OIDC `name`.
+`create_flask_token()` returns `display_name` (not `name`); the JWT wire claim remains OIDC `name`. Shared Profile list filters/sort and `get_profile_by_token()` use Profile `display_name` and JWT `profile_id` (not document `name` / `full_name`).
 
 **Local publish** (SRE / debugging, skips CI): `aws sso login --profile mentorhub-shared` then `pipenv run publish-package`.
 
@@ -172,7 +172,7 @@ by outbound RBAC).
 
 #### Downstream planning artifacts
 
-Domain API repos should pin **`api-utils==1.0.1`** and follow the issue
+Domain API repos should pin **`api-utils==1.0.2`** and follow the issue
 artifacts in this repo's `tasks/` folder (not orchestrated from here):
 
 - [`tasks/SHIPPED_ISSUE.journey_api.md`](tasks/SHIPPED_ISSUE.journey_api.md) — Journey

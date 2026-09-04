@@ -45,8 +45,7 @@ DATE_PROPERTIES = ["start", "end"]
 SYSTEM_MANAGED_FIELDS = ("_id", "created", "saved")
 
 PROFILE_LIST_FILTERS = {
-    "name": {"type": "contains", "field": "name"},
-    "full_name": {"type": "contains", "field": "full_name"},
+    "display_name": {"type": "contains", "field": "display_name"},
     "email": {"type": "contains", "field": "email"},
     "description": {"type": "contains", "field": "description"},
     "status": {"type": "in_list", "field": "status"},
@@ -54,10 +53,9 @@ PROFILE_LIST_FILTERS = {
 }
 
 PROFILE_LIST_ORDER = {
-    "default": {"field": "name", "order": "asc"},
+    "default": {"field": "display_name", "order": "asc"},
     "allowed": {
-        "name": ("asc", "desc"),
-        "full_name": ("asc", "desc"),
+        "display_name": ("asc", "desc"),
         "email": ("asc", "desc"),
         "status": ("asc", "desc"),
         "created.at_time": ("asc", "desc"),
@@ -90,7 +88,6 @@ class ProfileService:
         """Build the $or identity scope for Profile list/get visibility."""
         or_clauses = []
         profile_id = token.get("profile_id")
-        user_id = token.get("user_id")
         customer_id = token.get("customer_id")
         mentor_id = token.get("mentor_id")
 
@@ -98,8 +95,6 @@ class ProfileService:
             clause = {"_id": profile_id}
             encode_document(clause, ID_PROPERTIES, DATE_PROPERTIES)
             or_clauses.append(clause)
-        if user_id:
-            or_clauses.append({"name": user_id})
         if customer_id:
             clause = {"customer_id": customer_id}
             encode_document(clause, ID_PROPERTIES, DATE_PROPERTIES)
@@ -132,27 +127,26 @@ class ProfileService:
         """
         Resolve the caller's Profile from the JWT identity.
 
-        Per the domain convention, the caller's Profile is the one whose
-        ``name`` matches the token's ``user_id``. This is the canonical
+        The caller's Profile is selected by the JWT ``profile_id`` claim. This is the canonical
         service-to-service entry point other services use to resolve the
         caller's Profile (e.g. the mentor id stored as ``Encounter.mentor_id``)
         without reaching into the Profile collection themselves.
 
         Args:
-            token: Token dictionary with ``user_id`` and roles
+            token: Token dictionary with ``profile_id`` and roles
             breadcrumb: Breadcrumb dictionary for audit/logging
 
         Returns:
             dict | None: The caller's Profile document, or ``None`` if no
             Profile matches the token identity.
         """
+        profile_id = token.get("profile_id")
+        if not profile_id:
+            return None
+
         mongo = MongoIO.get_instance()
         config = Config.get_instance()
-        profiles = mongo.get_documents(
-            config.PROFILE_COLLECTION_NAME,
-            match={"name": token.get("user_id")},
-        )
-        return profiles[0] if profiles else None
+        return mongo.get_document(config.PROFILE_COLLECTION_NAME, str(profile_id))
 
     @classmethod
     def get_profiles(
@@ -173,7 +167,7 @@ class ProfileService:
             offset: Zero-based start index
             size: Number of documents to return
             filters: Parsed filter dict from parse_filter_params
-            sort_by: PyMongo sort list from build_sort_by; default name asc
+            sort_by: PyMongo sort list from build_sort_by; default display_name asc
 
         Returns:
             list: Profile documents
