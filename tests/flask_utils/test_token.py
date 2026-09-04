@@ -30,10 +30,9 @@ class TestToken(unittest.TestCase):
         profile_id="A00000000000000000000001",
         customer_id="D00000000000000000000006",
         mentor_id="",
-        name="Test User",
+        display_name="Test User",
         include_profile_id=True,
-        include_name=True,
-        jwt_display_name=None,
+        include_display_name=True,
     ):
         """Helper to create a test JWT token."""
         now = datetime.now(timezone.utc)
@@ -51,10 +50,8 @@ class TestToken(unittest.TestCase):
             "customer_id": customer_id,
             "mentor_id": mentor_id,
         }
-        if include_name:
-            claims["name"] = name
-        if jwt_display_name is not None:
-            claims["display_name"] = jwt_display_name
+        if include_display_name:
+            claims["display_name"] = display_name
         if include_profile_id:
             claims["profile_id"] = profile_id
 
@@ -73,7 +70,7 @@ class TestToken(unittest.TestCase):
 
         self.assertEqual(token.claims.get("sub"), "test-user-123")
         self.assertEqual(token.claims.get("user_id"), "test-user-123")
-        self.assertEqual(token.claims.get("name"), "Test User")
+        self.assertEqual(token.claims.get("display_name"), "Test User")
         self.assertEqual(token.claims.get("roles"), ["developer"])
         self.assertEqual(token.claims.get("profile_id"), "A00000000000000000000001")
         self.assertEqual(token.claims.get("customer_id"), "D00000000000000000000006")
@@ -200,7 +197,7 @@ class TestToken(unittest.TestCase):
             profile_id="A00000000000000000000002",
             customer_id="D00000000000000000000002",
             mentor_id="A00000000000000000000006",
-            name="User 456",
+            display_name="User 456",
         )
 
         mock_request = Mock()
@@ -210,7 +207,7 @@ class TestToken(unittest.TestCase):
         token = Token(request_obj=mock_request)
         token_dict = token.to_dict()
 
-        self.assertEqual(token.claims.get("name"), "User 456")
+        self.assertEqual(token.claims.get("display_name"), "User 456")
         self.assertEqual(token_dict["user_id"], "user-456")
         self.assertEqual(token_dict["display_name"], "User 456")
         self.assertNotIn("name", token_dict)
@@ -220,9 +217,9 @@ class TestToken(unittest.TestCase):
         self.assertEqual(token_dict["mentor_id"], "A00000000000000000000006")
         self.assertEqual(token_dict["remote_ip"], "192.168.1.1")
 
-    def test_token_to_dict_missing_name_claim(self):
-        """Missing JWT name and display_name map to empty display_name."""
-        token_string = self._create_test_jwt(include_name=False)
+    def test_token_to_dict_missing_display_name_claim(self):
+        """Missing or blank JWT display_name maps to unknown."""
+        token_string = self._create_test_jwt(include_display_name=False)
 
         mock_request = Mock()
         mock_request.headers = {"Authorization": f"Bearer {token_string}"}
@@ -231,15 +228,26 @@ class TestToken(unittest.TestCase):
         token = Token(request_obj=mock_request)
         token_dict = token.to_dict()
 
-        self.assertIsNone(token.claims.get("name"))
-        self.assertEqual(token_dict["display_name"], "")
+        self.assertIsNone(token.claims.get("display_name"))
+        self.assertEqual(token_dict["display_name"], "unknown")
         self.assertNotIn("name", token_dict)
 
-    def test_token_to_dict_display_name_claim_without_name(self):
-        """JWT display_name without name maps to application display_name."""
-        token_string = self._create_test_jwt(
-            include_name=False,
-            jwt_display_name="Persona Label",
+    def test_token_to_dict_ignores_name_claim(self):
+        """OIDC name is not a display_name fallback."""
+        now = datetime.now(timezone.utc)
+        token_string = jwt.encode(
+            {
+                "iss": self.config.JWT_ISSUER,
+                "aud": self.config.JWT_AUDIENCE,
+                "sub": "test-user-123",
+                "iat": int(now.timestamp()),
+                "exp": int((now + timedelta(minutes=60)).timestamp()),
+                "roles": ["developer"],
+                "profile_id": "A00000000000000000000001",
+                "name": "Should Not Appear",
+            },
+            self.config.JWT_SECRET,
+            algorithm=self.config.JWT_ALGORITHM,
         )
 
         mock_request = Mock()
@@ -249,9 +257,8 @@ class TestToken(unittest.TestCase):
         token = Token(request_obj=mock_request)
         token_dict = token.to_dict()
 
-        self.assertIsNone(token.claims.get("name"))
-        self.assertEqual(token.claims.get("display_name"), "Persona Label")
-        self.assertEqual(token_dict["display_name"], "Persona Label")
+        self.assertEqual(token.claims.get("name"), "Should Not Appear")
+        self.assertEqual(token_dict["display_name"], "unknown")
         self.assertNotIn("name", token_dict)
 
     def test_create_flask_token_success(self):
@@ -263,7 +270,7 @@ class TestToken(unittest.TestCase):
             subject="flask-user",
             roles=["developer"],
             profile_id="A00000000000000000000001",
-            name="Flask User",
+            display_name="Flask User",
         )
 
         with app.test_request_context(
