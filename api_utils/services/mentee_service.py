@@ -79,12 +79,17 @@ class MenteeService:
         if profile is None:
             return False
 
-        profile_mentor_id = profile.get("mentor_id")
-        if mentor_id and str(profile_mentor_id) == str(mentor_id):
-            return True
-        if token_profile_id and str(profile_mentor_id) == str(token_profile_id):
-            return True
-        return False
+        from api_utils.mongo_utils import decode_document
+
+        decode_document(profile)
+        profile_mentor_id = str(profile.get("mentor_id") or "").lower()
+        if not profile_mentor_id:
+            return False
+
+        caller_claims = {
+            str(claim).lower() for claim in (mentor_id, token_profile_id) if claim
+        }
+        return profile_mentor_id in caller_claims
 
     @classmethod
     def _require_mentee_visible(cls, document, token, profile_id):

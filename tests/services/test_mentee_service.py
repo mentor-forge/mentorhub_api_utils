@@ -183,6 +183,76 @@ class TestMenteeService(unittest.TestCase):
         config.MENTEE_COLLECTION_NAME = "MenteeCustom"
         self.assertEqual(MenteeService._collection_name(config), "MenteeCustom")
 
+    @patch("api_utils.services.mentee_service.Config.get_instance")
+    @patch("api_utils.services.mentee_service.MongoIO.get_instance")
+    def test_mentor_of_profile_matches_object_id(self, mock_get_mongo, mock_get_config):
+        """_mentor_of_profile decodes ObjectId and matches token profile_id."""
+        mock_get_config.return_value = _make_config()
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = {
+            "_id": ObjectId("a00000000000000000000019"),
+            "mentor_id": ObjectId("a00000000000000000000010"),
+        }
+        mock_get_mongo.return_value = mock_mongo
+
+        token = {
+            "user_id": "paula",
+            "roles": ["mentor"],
+            "profile_id": "A00000000000000000000010",
+        }
+
+        self.assertTrue(
+            MenteeService._mentor_of_profile("a00000000000000000000019", token)
+        )
+
+    @patch("api_utils.services.mentee_service.Config.get_instance")
+    @patch("api_utils.services.mentee_service.MongoIO.get_instance")
+    def test_mentor_of_profile_matches_extended_json_oid(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """_mentor_of_profile decodes Extended JSON $oid and matches token mentor_id."""
+        mock_get_config.return_value = _make_config()
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = {
+            "_id": "a00000000000000000000019",
+            "mentor_id": {"$oid": "a00000000000000000000010"},
+        }
+        mock_get_mongo.return_value = mock_mongo
+
+        token = {
+            "user_id": "paula",
+            "roles": ["mentor"],
+            "mentor_id": "a00000000000000000000010",
+        }
+
+        self.assertTrue(
+            MenteeService._mentor_of_profile("a00000000000000000000019", token)
+        )
+
+    @patch("api_utils.services.mentee_service.Config.get_instance")
+    @patch("api_utils.services.mentee_service.MongoIO.get_instance")
+    def test_mentor_of_profile_mismatch_returns_false(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """_mentor_of_profile returns False when caller is not the mentor."""
+        mock_get_config.return_value = _make_config()
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = {
+            "_id": ObjectId("a00000000000000000000019"),
+            "mentor_id": ObjectId("a00000000000000000000010"),
+        }
+        mock_get_mongo.return_value = mock_mongo
+
+        token = {
+            "user_id": "other",
+            "roles": ["mentor"],
+            "profile_id": "999999999999999999999999",
+        }
+
+        self.assertFalse(
+            MenteeService._mentor_of_profile("a00000000000000000000019", token)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

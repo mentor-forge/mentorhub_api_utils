@@ -2,6 +2,7 @@
 
 from .mongo_io import MongoIO
 from .encode_properties import encode_document
+from .decode_properties import decode_document
 from .list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
@@ -19,6 +20,7 @@ from .list_query import (
 __all__ = [
     "MongoIO",
     "encode_document",
+    "decode_document",
     "DEFAULT_OFFSET",
     "DEFAULT_SIZE",
     "MAX_SIZE",
