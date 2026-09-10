@@ -12,6 +12,7 @@ from .flask_utils.route_wrapper import handle_route_exceptions
 from .flask_utils.ejson_encoder import MongoJSONEncoder
 from .mongo_utils.mongo_io import MongoIO
 from .mongo_utils.encode_properties import encode_document
+from .mongo_utils.decode_properties import decode_document
 from .mongo_utils.list_query import (
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
@@ -66,6 +67,7 @@ __all__ = [
     MongoIO,
     MongoJSONEncoder,
     encode_document,
+    decode_document,
     DEFAULT_OFFSET,
     DEFAULT_SIZE,
     MAX_SIZE,

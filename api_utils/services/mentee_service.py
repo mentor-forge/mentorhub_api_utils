@@ -79,31 +79,17 @@ class MenteeService:
         if profile is None:
             return False
 
-        profile_mentor_id = profile.get("mentor_id")
-        if isinstance(profile_mentor_id, dict) and "$oid" in profile_mentor_id:
-            profile_mentor_id = profile_mentor_id["$oid"]
+        from api_utils.mongo_utils import decode_document
+
+        decode_document(profile)
+        profile_mentor_id = str(profile.get("mentor_id") or "").lower()
         if not profile_mentor_id:
             return False
 
-        from api_utils.mongo_utils import encode_document
-
-        profile_box = {"mentor_id": profile_mentor_id}
-        try:
-            encode_document(profile_box, ["mentor_id"], [])
-        except ValueError:
-            return False
-        expected_mentor_oid = profile_box["mentor_id"]
-
-        for claim in (mentor_id, token_profile_id):
-            if claim:
-                claim_box = {"mentor_id": claim}
-                try:
-                    encode_document(claim_box, ["mentor_id"], [])
-                    if claim_box["mentor_id"] == expected_mentor_oid:
-                        return True
-                except ValueError:
-                    continue
-        return False
+        caller_claims = {
+            str(claim).lower() for claim in (mentor_id, token_profile_id) if claim
+        }
+        return profile_mentor_id in caller_claims
 
     @classmethod
     def _require_mentee_visible(cls, document, token, profile_id):
