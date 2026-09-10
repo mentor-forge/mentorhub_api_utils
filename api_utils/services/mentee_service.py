@@ -80,10 +80,29 @@ class MenteeService:
             return False
 
         profile_mentor_id = profile.get("mentor_id")
-        if mentor_id and str(profile_mentor_id) == str(mentor_id):
-            return True
-        if token_profile_id and str(profile_mentor_id) == str(token_profile_id):
-            return True
+        if isinstance(profile_mentor_id, dict) and "$oid" in profile_mentor_id:
+            profile_mentor_id = profile_mentor_id["$oid"]
+        if not profile_mentor_id:
+            return False
+
+        from api_utils.mongo_utils import encode_document
+
+        profile_box = {"mentor_id": profile_mentor_id}
+        try:
+            encode_document(profile_box, ["mentor_id"], [])
+        except ValueError:
+            return False
+        expected_mentor_oid = profile_box["mentor_id"]
+
+        for claim in (mentor_id, token_profile_id):
+            if claim:
+                claim_box = {"mentor_id": claim}
+                try:
+                    encode_document(claim_box, ["mentor_id"], [])
+                    if claim_box["mentor_id"] == expected_mentor_oid:
+                        return True
+                except ValueError:
+                    continue
         return False
 
     @classmethod

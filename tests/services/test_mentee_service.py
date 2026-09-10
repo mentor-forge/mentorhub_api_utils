@@ -183,6 +183,30 @@ class TestMenteeService(unittest.TestCase):
         config.MENTEE_COLLECTION_NAME = "MenteeCustom"
         self.assertEqual(MenteeService._collection_name(config), "MenteeCustom")
 
+    @patch("api_utils.services.mentee_service.Config.get_instance")
+    @patch("api_utils.services.mentee_service.MongoIO.get_instance")
+    def test_mentor_of_profile_encodes_object_id_for_comparison(
+        self, mock_get_mongo, mock_get_config
+    ):
+        """_mentor_of_profile uses encode_document to match ObjectId regardless of string case."""
+        mock_get_config.return_value = _make_config()
+        mock_mongo = MagicMock()
+        mock_mongo.get_document.return_value = {
+            "_id": ObjectId("A00000000000000000000019"),
+            "mentor_id": ObjectId("A00000000000000000000010"),
+        }
+        mock_get_mongo.return_value = mock_mongo
+
+        token = {
+            "user_id": "paula",
+            "roles": ["mentor"],
+            "profile_id": "A00000000000000000000010",
+        }
+
+        self.assertTrue(
+            MenteeService._mentor_of_profile("a00000000000000000000019", token)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
