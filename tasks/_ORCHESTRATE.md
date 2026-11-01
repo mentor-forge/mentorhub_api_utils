@@ -8,6 +8,8 @@ Before starting the workflow, check the current branch. If you are on `main`, cr
 
 Now orchestrate all Pending Tasks as outlined below. Use an **orchestration agent** that spawns a **fresh agent per task**.
 
+**Context and model selection**: Use a fresh sub-agent for each task to keep its context focused and prevent prior task history from accumulating. Give it the task file, relevant repository instructions and context references, and a concise summary of prerequisite results; do not pass the entire orchestration conversation by default. Where the tool supports model selection, prefer a lower-cost or faster model that can reliably complete the task, and use a more capable model for complex reasoning or unresolved failures. If model selection is unavailable, use the available model while retaining task isolation. Return a concise summary of changed files, validation results and blockers to the orchestrator, which retains responsibility for review, integration and commits.
+
 **One task, one commit.** Do **not** batch multiple tasks into a single commit. Each shipped task must produce exactly one commit on the feature branch so the pull request lists every task as a separate commit for review.
 
 Per-task loop (repeat until no `PENDING.*` tasks remain):
@@ -16,7 +18,7 @@ Per-task loop (repeat until no `PENDING.*` tasks remain):
    - **Task Selection**: Select only `PENDING.*` tasks.
    - **Execution order**: Review all PENDING tasks and order dependencies first.
    - Run tasks **serially** when dependencies exist; schedule concurrent agents only when tasks are truly independent.
-2. **For the current task**, the orchestrator launches a new agent with:
+2. **For each task**, the orchestrator selects a suitable available model using the guidance above and launches a fresh sub-agent with:
    - The task file path
    - Any outputs from prior tasks (e.g. "R041 complete; NoteService harvested to api_utils.services")
 3. **Sub-agent** executes only that task: read context, implement, test, update **Execution Notes**.
