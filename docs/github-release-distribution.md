@@ -2,11 +2,11 @@
 
 ## Delivery audit
 
-The inspected feature branch declares version 1.0.4, and the checkout contains tag `v1.0.4`. Choose the next patch version after checking local and remote tags and releases. The build uses setuptools, discovers `api_utils*` packages, and packages the README and project metadata. The package includes configuration, Flask authentication and route helpers, MongoDB helpers, and shared services. Preserve the `api_utils` import and the normalized `api-utils` distribution identity and public exports.
+The delivery audit started at version 1.0.4. Version 1.0.5 is prepared for review as the first GitHub-hosted version. The build uses setuptools, discovers `api_utils*` packages, and packages the README and project metadata. The package includes configuration, Flask authentication and route helpers, MongoDB helpers, and shared services. Preserve the `api_utils` import and the normalized `api-utils` distribution identity and public exports.
 
-Both Stage Zero build entry points currently use Pipenv to build a wheel and source archive. The tag helper pushes the version tag, and the tagged workflow assumes an AWS role and uses Twine to send both artifacts to CodeArtifact. The operator publish helper also uses the AWS CLI and Twine. The development Pipfile and lock already declare public PyPI as their only index.
+Before the migration, both Stage Zero build entry points used Pipenv to build a wheel and source archive. The tag helper pushed the version tag, and the former tagged workflow and operator helper uploaded both artifacts to CodeArtifact. The development Pipfile and lock already declare public PyPI as their only index.
 
-The package code has no boto3, botocore, Cognito client, or CodeArtifact integration. Its runtime integrations include configured MongoDB access, Flask, Prometheus metrics, and JWT processing. The token module imports `jwt`, and the development Pipfile supplies PyJWT, but the project metadata does not list it. Add PyJWT to the wheel's runtime dependencies before publication and verify the top-level import from a clean install outside the source checkout.
+The package code has no boto3, botocore, Cognito client, or CodeArtifact integration. Its runtime integrations include configured MongoDB access, Flask, Prometheus metrics, and JWT processing. The token module imports `jwt`. The wheel now declares PyJWT as a runtime dependency along with Flask, PyMongo, and the Prometheus Flask exporter.
 
 ## Release artifacts and consumer installation
 
@@ -21,7 +21,7 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [packages]
-api-utils = {file = "https://github.com/mentor-forge/mentorhub_api_utils/releases/download/vX.Y.Z/api_utils-X.Y.Z-py3-none-any.whl"}
+api-utils = {file = "https://github.com/mentor-forge/mentorhub_api_utils/releases/download/v1.0.5/api_utils-1.0.5-py3-none-any.whl"}
 
 [requires]
 python_version = "3.12"

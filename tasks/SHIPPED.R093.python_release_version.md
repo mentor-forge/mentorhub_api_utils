@@ -1,6 +1,6 @@
 # R093 – Prepare the next Python utils version and adoption documentation
 
-**Status**: Pending
+**Status**: Shipped
 
 **Type**: Feature
 
@@ -73,4 +73,7 @@ AWS inventory, secure backup/restore evidence and separately approved decommissi
 
 ## Execution Notes
 
-Reserved for the execution agent. No implementation, tests, service changes or publication have been performed.
+- Local tags ended at v1.0.4. GitHub returned no matching tag and no release for v1.0.5. Prepared 1.0.5 and added PyJWT to the wheel runtime dependencies.
+- Updated adoption, lockfile, checksum, rollback floor, and maintainer publication instructions. The documented public wheel URL becomes usable only after publication.
+- Passed 258 unit tests, Black formatting check, isolated wheel and sdist builds, and clean Python 3.12 wheel installation with public PyPI transitives. Pip reported no broken requirements and imports of Config, authentication, and services resolved from the clean environment.
+- No tags, releases, or consumer pin changes were made.

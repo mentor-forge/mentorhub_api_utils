@@ -1,6 +1,6 @@
 # Mentor Hub — shared API utilities
 
-This repo builds and publishes the **`api_utils`** PyPI package (`pip install api-utils`) used across the [Mentor Hub](https://github.com/mentor-forge/mentorhub) system. Packages are published to **AWS CodeArtifact** in the Shared-Services account.
+This repo builds the **`api_utils`** Python package used across [Mentor Hub](https://github.com/mentor-forge/mentorhub). Mentor Hub distributes the package through public GitHub Releases.
 
 ## Current State
 
@@ -16,16 +16,20 @@ formally versioned until we cut MVP.
 
 ## Install as a dependency (domain APIs)
 
-```bash
-mh              # once per session (~12h)
-pipenv install
+After the maintainer publishes the release, pin its exact wheel URL in the consumer's `Pipfile`. The first planned GitHub-hosted release is 1.0.5.
+
+```toml
+[packages]
+api-utils = {file = "https://github.com/mentor-forge/mentorhub_api_utils/releases/download/v1.0.5/api_utils-1.0.5-py3-none-any.whl"}
 ```
+
+Compare the downloaded wheel's SHA-256 with the published `SHA256SUMS`. Run `pipenv lock`, verify the exact URL and digest in `Pipfile.lock`, then run `pipenv sync`. Commit both files together. Public PyPI supplies transitive dependencies. The PyPI project named `api-utils` is unrelated to Mentor Hub. See the [distribution guide](docs/github-release-distribution.md) for verification and rollback.
 
 ## Developer Commands
 
 ```bash
 ## Install dependencies
-pipenv install --dev
+pipenv sync --dev
 
 # start backing db container (required for integration and e2e tests)
 pipenv run db
@@ -49,9 +53,6 @@ pipenv run build
 ## release: tag after merge — see Release and publish
 pipenv run tag-release
 
-## publish to CodeArtifact locally (SRE / publish role; after SSO login)
-pipenv run publish-package
-
 ## format code
 pipenv run format
 
@@ -61,13 +62,11 @@ pipenv run lint
 
 ## Release and publish
 
-Libraries use **pinned SemVer** in CodeArtifact (`api-utils==1.0.4`). Releasing is two steps:
-- Work on a feature branch, make sure to bump version in pyproject.toml before opening PR.
-- After PR is approved and merged, use ``pipenv run tag-release`` to publish the new code
+1. Bump the version in `pyproject.toml`, then review and merge the release PR.
+2. From a clean checkout of the intended main commit, the maintainer runs `pipenv run tag-release` to push the matching permanent tag.
+3. GitHub Actions tests and builds the wheel and source archive, then publishes the tested artifacts and checksums. Verify the actual public wheel in a clean consumer before updating domain API pins.
 
 `create_flask_token()` returns JWT `display_name`, or `unknown` when that claim is blank or missing. It does not read OIDC `name`. Shared Profile list filters/sort and `get_profile_by_token()` use Profile `display_name` and JWT `profile_id` (not document `name` / `full_name`).
-
-**Local publish** (SRE / debugging, skips CI): `aws sso login --profile mentorhub-shared` then `pipenv run publish-package`.
 
 ## Project Structure
 
@@ -172,7 +171,7 @@ by outbound RBAC).
 
 #### Downstream planning artifacts
 
-Domain API repos should pin **`api-utils==1.0.4`** and follow the issue
+Domain API repos should pin the exact published wheel URL as described above and follow the issue
 artifacts in this repo's `tasks/` folder (not orchestrated from here):
 
 - [`tasks/SHIPPED_ISSUE.journey_api.md`](tasks/SHIPPED_ISSUE.journey_api.md) — Journey
