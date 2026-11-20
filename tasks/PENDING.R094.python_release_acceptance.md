@@ -70,4 +70,8 @@ AWS inventory, secure backup/restore evidence and separately approved decommissi
 
 ## Execution Notes
 
-Reserved for the execution agent. No implementation, tests, service changes or publication have been performed.
+Prepublication checks passed for the 1.0.5 wheel and source build. The wheel-content test checks key modules, distribution identity, version, and PyJWT metadata. The unit suite passed 259 tests including wheel inspection. Lint passed. The integration suite passed 17 tests and the HTTP end-to-end suite passed 40 against disposable, seeded MongoDB and a loopback demo server.
+
+A clean external Python 3.12 Pipenv fixture locked and synced the local wheel with public PyPI as its only index. The lock contained the matching SHA-256 and the installed package passed dependency, import-origin, version, and Config/auth/service export checks.
+
+Keep this task pending until the maintainer publishes the release. Then rerun the documented consumer checklist from the public URL and record the actual tag commit, artifact URL, installed version, checksum, and clean-install evidence.

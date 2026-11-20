@@ -38,3 +38,33 @@ Compare the wheel's SHA-256 against the published checksum, generate the lock wi
 ## CI and publication
 
 Pull requests use read-only CI to sync the public lock, run unit tests and lint, and inspect the built wheel and source archive. The tag workflow uses the same checks and transfers the resulting distributions and checksums to a separate publication job. That job checks the tag against package metadata, verifies that the commit belongs to main and that the repository is public, then creates the release using the tested assets. Existing releases remain immutable. The first real publication and clean consumer download are maintainer and acceptance gates.
+
+## Consumer acceptance checklist
+
+Create a temporary project outside the API Utils checkout using the example
+Pipfile above. After publication, download the wheel and checksum file from the
+release without credentials and verify the wheel checksum before installing.
+Run these checks in the temporary project:
+
+```sh
+pipenv lock
+pipenv sync
+pipenv run python -m pip check
+pipenv run python -c 'from importlib.metadata import version; import api_utils; from api_utils import Config, Token, create_flask_token, MongoIO, JourneyService, NoteService; print(version("api-utils"), api_utils.__file__)'
+```
+
+Confirm the lockfile contains the exact GitHub asset URL and the published
+wheel hash, and lists public PyPI as its package index. Confirm the printed
+version matches the tag and the import resolves inside the temporary virtual
+environment. Run the artifact inspection from the API Utils checkout with
+`API_UTILS_WHEEL` set to the downloaded wheel path and
+`pipenv run pytest tests/release/test_wheel_contents.py`. Record the actual
+release URL, tag commit, version, checksum, and clean-install results before
+handing off to consumers.
+
+Before publication, the same Pipenv lock and sync checks passed with the
+locally built 1.0.5 wheel supplied as a local file URL. The lock contained the
+matching wheel SHA-256, public PyPI remained the sole package index, and the
+isolated install passed dependency, version, import path, and public export
+checks. This evidence covers the local artifact. Published asset verification
+remains pending maintainer publication.
