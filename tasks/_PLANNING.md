@@ -53,7 +53,7 @@ Each task file must contain the following sections under H1 and H2 headings.
   - Can include changing existing tests because of modified features.
   - Should always include a description of the tests that should be used to verify completion.
   - In this repo, that typically means some combination of:
-    - `pipenv install --dev` — refresh dependencies after `Pipfile` / lockfile changes (CodeArtifact auth; run `mh` first if needed)
+    - `pipenv sync --dev` — install dependencies from the committed lockfile
     - `pipenv run db` start the backing database (required for integration and e2e testing)
     - `pipenv run test` — pure unit tests (pytest, `-m "not e2e and not integration"`; no backing services)
     - `pipenv run integration` — integration tests against the backing DB (`-m integration`; services + MongoIO); use this (not service-level type assertions) to cover DB-schema type safety
@@ -165,15 +165,7 @@ If the configurator is unavailable, set the task **Status** to `Blocked` and sto
 
 ## Dependency management
 
-Domain APIs resolve `api-utils` and other packages from **AWS CodeArtifact**. When a task bumps or adds dependencies in `Pipfile` / `Pipfile.lock`, the execution agent must install them with:
-
-```bash
-pipenv run install
-```
-
-Do **not** use bare `pipenv install` or `pipenv install --dev` in task instructions — those skip the repo’s CodeArtifact auth wrapper (`scripts/pipenv-install.sh`). Run `mh` once per shell session before `pipenv run install` if CodeArtifact credentials are not already available (see `README.md` and `../mentorhub/DeveloperEdition/standards/api_standards.md`).
-
-Task **Testing Expectations** and **Goals** should call out `pipenv run install` whenever `Pipfile` or `Pipfile.lock` changes.
+Domain APIs pin the exact public GitHub Release wheel URL for `api-utils` and use public PyPI for transitive dependencies. For dependency changes, update the Pipfile, regenerate the lock with `pipenv lock`, and verify a clean `pipenv sync` (or `pipenv sync --dev` for development dependencies). Check the wheel digest against the published checksum and keep the Pipfile and lockfile together.
 
 ## MongoDB access
 

@@ -14,7 +14,6 @@ pytest = "*"
 black = "*"
 setuptools = "*"
 build = "*"
-twine = "*"
 requests = "*"
 
 [scripts]

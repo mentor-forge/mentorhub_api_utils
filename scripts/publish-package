@@ -1,16 +1,36 @@
 #!/usr/bin/env sh
-# Build and upload to CodeArtifact (mentorhub-pypi).
-# Targets: Specifications/aws-platform.yaml — override via env if needed.
-set -e
+# Upload prebuilt and tested artifacts to an existing empty GitHub Release.
+set -eu
 
-pipenv install --dev
-pipenv run build
+fail() { printf '%s\n' "$*" >&2; exit 1; }
 
-aws codeartifact login --tool twine \
-  --domain "${CODEARTIFACT_DOMAIN:-mentor-forge}" \
-  --domain-owner "${AWS_SHARED_SERVICES_ACCOUNT_ID:-560167829275}" \
-  --repository "${CODEARTIFACT_PYPI_REPO:-mentorhub-pypi}" \
-  --region "${AWS_REGION:-us-east-1}" \
-  --profile "${MH_AWS_PROFILE_SHARED:-mentorhub-shared}"
+[ "$#" -eq 0 ] || fail "Usage: publish-package"
+cd "$(dirname "$0")/.."
+repo=mentor-forge/mentorhub_api_utils
+version=$(sed -nE 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' pyproject.toml)
+[ -n "$version" ] || fail 'Could not find version = "X.Y.Z" in pyproject.toml'
+tag="v$version"
+ref="refs/tags/$tag"
 
-pipenv run twine upload --repository codeartifact dist/*
+[ -z "$(git status --porcelain)" ] || fail "Working tree must be clean before publishing."
+commit=$(git rev-parse HEAD)
+local_commit=$(git rev-parse --verify "$ref^{commit}") || fail "Missing local tag $tag."
+[ "$local_commit" = "$commit" ] || fail "HEAD must match $tag."
+remote_tags=$(git ls-remote --tags origin "$ref" "$ref^{}") || fail "Could not verify tag $tag on origin."
+remote_commit=$(printf '%s\n' "$remote_tags" | awk -v ref="$ref" '$2 == ref { tag = $1 } $2 == ref "^{}" { peeled = $1 } END { print (peeled ? peeled : tag) }')
+[ "$remote_commit" = "$commit" ] || fail "Tag $tag on origin must match HEAD."
+
+asset_count=$(gh release view "$tag" --repo "$repo" --json assets --jq '.assets | length') ||
+  fail "Could not verify an existing GitHub Release for $tag."
+[ "$asset_count" = 0 ] || fail "Release $tag already has assets. Existing release assets are immutable."
+
+wheel="api_utils-$version-py3-none-any.whl"
+sdist="api_utils-$version.tar.gz"
+cd dist
+[ -s "$wheel" ] && [ -s "$sdist" ] || fail "Build and test the wheel and source archive for $version first."
+pipenv run python -c 'import hashlib, pathlib, sys
+for arg in sys.argv[1:]:
+    path = pathlib.Path(arg)
+    print(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
+' "$wheel" "$sdist" > SHA256SUMS
+gh release upload "$tag" --repo "$repo" "$wheel" "$sdist" SHA256SUMS

@@ -1,53 +1,56 @@
 name: Publish Package
-run-name: ${{ github.actor }} published ${{ github.ref_name }}
 
 on:
   push:
-    tags:
-      - v*
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
 
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
-      contents: read
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Verify tag matches pyproject.toml version
-        run: |
-          VERSION=$(grep -E '^version = "[0-9]+\.[0-9]+\.[0-9]+"' pyproject.toml | sed -E 's/version = "([^"]+)"/\1/')
-          TAG="${GITHUB_REF_NAME#v}"
-          if [ "$VERSION" != "$TAG" ]; then
-            echo "Tag v${TAG} does not match pyproject.toml version ${VERSION}." >&2
-            exit 1
-          fi
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PUBLISH }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install build tools
-        run: pip install pipenv twine build
-
-      - name: Build package
+      - uses: actions/download-artifact@v4
+        with:
+          name: api-utils-distributions
+          path: dist
+      - name: Verify and publish the tested assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          pipenv install --dev
-          pipenv run build
-
-      - name: Upload to CodeArtifact
-        run: |
-          aws codeartifact login --tool twine \
-            --domain ${{ vars.CODEARTIFACT_DOMAIN }} \
-            --domain-owner ${{ vars.AWS_SHARED_SERVICES_ACCOUNT_ID }} \
-            --repository ${{ vars.CODEARTIFACT_PYPI_REPO }}
-          pipenv run twine upload --repository codeartifact dist/*
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "Tag must match the package version v$version." >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor HEAD origin/main
+          test "$(gh repo view "$REPOSITORY" --json visibility --jq .visibility)" = PUBLIC
+          existing=$(gh api --paginate "repos/$REPOSITORY/releases" --jq '.[] | .tag_name')
+          if grep -Fxq -- "$GITHUB_REF_NAME" <<< "$existing"; then
+            echo "Release $GITHUB_REF_NAME already exists." >&2
+            exit 1
+          fi
+          cd dist
+          wheel="api_utils-$version-py3-none-any.whl"
+          sdist="api_utils-$version.tar.gz"
+          sha256sum "$wheel" "$sdist" | diff - SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" "$wheel" "$sdist" SHA256SUMS \
+            --repo "$REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
