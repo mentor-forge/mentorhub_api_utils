@@ -1,6 +1,6 @@
 # R091 – Replace CodeArtifact release helpers with GitHub Release delivery
 
-**Status**: Pending
+**Status**: Shipped
 
 **Type**: Feature
 
@@ -77,4 +77,7 @@ AWS inventory, secure backup/restore evidence and separately approved decommissi
 
 ## Execution Notes
 
-Reserved for the execution agent. No implementation, tests, service changes or publication have been performed.
+- Replaced the operator upload with a GitHub Release upload of the exact matching prebuilt wheel, source archive, and generated SHA-256 manifest. It checks the local and remote tag commits and refuses to upload to a release with existing assets. The tag helper requires a clean checkout of the exact remote main commit, verifies existing tags and releases, and retains `--no-push` for local preparation.
+- Removed Twine and its now-unused development dependencies from the public PyPI lock while retaining unrelated pins. `pipenv verify` and `pipenv sync --dev` passed.
+- `pipenv run test` passed 258 tests, including four release-helper tests using temporary Git repositories and a mocked GitHub CLI. Lint and the isolated artifact build passed. The built wheel and source archive have the expected 1.0.4 filenames and distribution contents.
+- The locally built wheel installed in a clean Python 3.12 environment and passed `pip check`. Its import reproduced the pre-existing missing PyJWT metadata noted in R090. R093 owns the metadata fix and a fresh isolated import check. No actual tag, release, or asset was created.
