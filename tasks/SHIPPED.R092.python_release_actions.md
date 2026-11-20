@@ -1,6 +1,6 @@
 # R092 – Add AWS-free PR validation and tag-triggered Release workflow
 
-**Status**: Pending
+**Status**: Shipped
 
 **Type**: Feature
 
@@ -72,4 +72,6 @@ AWS inventory, secure backup/restore evidence and separately approved decommissi
 
 ## Execution Notes
 
-Reserved for the execution agent. No implementation, tests, service changes or publication have been performed.
+- Added read-only PR and reusable tag verification using the committed public Pipenv lock. The verification job runs tests and lint, checks the wheel and source archive contents and versions, and transfers their SHA-256 checksums with the tested artifacts for release runs.
+- Publication requires a matching version tag on a main ancestor, a public repository, and an unused release tag. The write-enabled publication job rechecks the checksums before creating the release from the verified artifacts.
+- YAML permissions and job wiring, Bash syntax, package contents, versions, and checksums passed local validation. Mocked publication reached release creation with the tested files for a valid tag and rejected an existing release and a mismatched tag. All 258 unit tests, lint, and the isolated build passed. Live publication remains a maintainer action.

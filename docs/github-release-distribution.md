@@ -34,3 +34,7 @@ Compare the wheel's SHA-256 against the published checksum, generate the lock wi
 1. Merge and validate the publisher changes on main. A maintainer verifies an unused version, then tags the intended main commit and uses the release workflow to publish the tested artifacts and checksums. Existing tags and release assets are immutable.
 2. Validate the published release in a clean external consumer before updating dependent APIs. Record the tag commit, artifact URL, package version, and wheel hash. Keep those consumers on their existing versions until this check passes.
 3. Update each consumer's exact URL and lockfile, then verify clean installs, tests, and container builds. Roll back a regression by restoring an earlier verified GitHub-hosted wheel URL and its matching lockfile. The first GitHub-hosted release is the rollback floor.
+
+## CI and publication
+
+Pull requests use read-only CI to sync the public lock, run unit tests and lint, and inspect the built wheel and source archive. The tag workflow uses the same checks and transfers the resulting distributions and checksums to a separate publication job. That job checks the tag against package metadata, verifies that the commit belongs to main and that the repository is public, then creates the release using the tested assets. Existing releases remain immutable. The first real publication and clean consumer download are maintainer and acceptance gates.
